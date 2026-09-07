@@ -1,0 +1,45 @@
+{
+  "player_id": 4402,
+  "name": "Robert Davis",
+  "position": "MF",
+  "club": {
+    "id": 3,
+    "name": "Arsenal"
+  },
+  "p_exit": 0.84,
+  "band": "hot",
+  "predicted_fee_eur": 61000000,
+  "factors": [
+    {
+      "label": "Contract runs out in 11 months",
+      "contribution": 0.24
+    },
+    {
+      "label": "New manager since April",
+      "contribution": 0.15
+    },
+    {
+      "label": "Playing 40% fewer minutes than last season",
+      "contribution": 0.1
+    },
+    {
+      "label": "Three tier-one reporters linked him this month",
+      "contribution": 0.07
+    },
+    {
+      "label": "No credible bids reported",
+      "contribution": -0.06
+    }
+  ],
+  "recent_rumours": [
+    {
+      "source": "The Wire Report",
+      "tier": 1,
+      "published_at": "2026-09-05T09:14:22Z"
+    }
+  ],
+  "image": {
+    "cutout": null,
+    "square": null
+  }
+}

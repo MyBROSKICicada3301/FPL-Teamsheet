@@ -1,0 +1,45 @@
+{
+  "player_id": 4409,
+  "name": "Mark Harris",
+  "position": "FW",
+  "club": {
+    "id": 2,
+    "name": "Chelsea"
+  },
+  "p_exit": 0.29,
+  "band": "warm",
+  "predicted_fee_eur": 9000000,
+  "factors": [
+    {
+      "label": "Playing 25% fewer minutes",
+      "contribution": 0.08
+    },
+    {
+      "label": "Contract runs out in 26 months",
+      "contribution": 0.03
+    },
+    {
+      "label": "Age 25 \u2014 approaching peak resale",
+      "contribution": 0.02
+    },
+    {
+      "label": "Signed a new deal 9 months ago",
+      "contribution": -0.09
+    },
+    {
+      "label": "No credible bids reported",
+      "contribution": -0.12
+    }
+  ],
+  "recent_rumours": [
+    {
+      "source": "The Wire Report",
+      "tier": 1,
+      "published_at": "2026-09-05T09:14:22Z"
+    }
+  ],
+  "image": {
+    "cutout": null,
+    "square": null
+  }
+}

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: #FFFFFF; color: #1D1D1F; font-family: "SF Pro Display", "Inter Tight", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; font-size: 17px; line-height: 1.6; -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
+  * { box-sizing: border-box; }
+  a { color: #1D1D1F; text-decoration: none; }
+  a:hover { color: #6E6E73; }
+  ::selection { background: #D2D2D7; }
+  :focus-visible { outline: 3px solid #1D1D1F; outline-offset: 2px; }
+  @keyframes tr-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</helmet>
+
+<nav style="position: sticky; top: 0; z-index: 20; height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-inline: max(5vw, 24px); background: rgba(255,255,255,0.72); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid #D2D2D7;">
+  <a href="#top" style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px;"><span style="width: 7px; height: 7px; border-radius: 9999px; background: #1D1D1F; display: block;"></span>Transfer Room</a>
+  <div style="display: flex; align-items: center; gap: 28px; font-size: 13px; color: #6E6E73;">
+    <a href="#players" style="color: #6E6E73;">Players</a>
+    <a href="#clubs" style="color: #6E6E73;">Clubs</a>
+    <a href="#method" style="color: #6E6E73;">Method</a>
+  </div>
+</nav>
+
+<section id="top" style="position: relative; background: radial-gradient(60% 50% at 50% 45%, #F5F5F7, #FFFFFF); padding-block: clamp(56px, 7vw, 96px) clamp(72px, 9vw, 120px); overflow: hidden;">
+  <div style="max-width: 1200px; margin-inline: auto; padding-inline: 5vw; display: grid; justify-items: center;">
+    <div style="position: relative; width: 100%; display: grid; justify-items: center;">
+      <div style="animation: tr-rise 600ms ease-out both; width: min(560px, 88%); height: clamp(320px, 60vh, 720px); border-radius: 0; background-image: repeating-linear-gradient(115deg, #EDEDF0 0 12px, #F7F7F9 12px 24px); display: grid; place-items: end center; padding-bottom: 18px;">
+        <span style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; letter-spacing: 0.04em; color: #6E6E73; text-transform: lowercase;">player cutout · transparent png · licensed feed</span>
+      </div>
+      <div style="position: absolute; inset: auto 0 0 0; display: grid; justify-items: center; gap: clamp(16px, 3vw, 32px); transform: translateY(34%);">
+        <h1 style="margin: 0; text-align: center; font-size: clamp(44px, 7.2vw, 88px); line-height: 0.95; font-weight: 600; letter-spacing: -0.035em; text-wrap: balance; max-width: 15ch;">
+          <span style="display: block; animation: tr-rise 600ms ease-out 120ms both;">Isak leaves in 73 days.</span>
+          <span style="display: block; animation: tr-rise 600ms ease-out 240ms both;">Probably.</span>
+        </h1>
+        <div style="display: grid; justify-items: center; gap: 6px; animation: tr-rise 600ms ease-out 360ms both;">
+          <div style="font-size: clamp(56px, 9vw, 112px); line-height: 1; font-weight: 600; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; font-feature-settings: 'ss01'; color: {{ heroColor }};">{{ heroText }}</div>
+          <div style="font-size: 13px; line-height: 1.4; color: #6E6E73;">likelihood of a summer exit</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="players" style="background: #F5F5F7; padding-block: clamp(72px, 9vw, 120px);">
+  <div style="max-width: 1200px; margin-inline: auto; padding-inline: 5vw; display: grid; gap: 12px;">
+    <h2 style="margin: 0; font-size: clamp(34px, 4.4vw, 56px); line-height: 1.05; font-weight: 600; letter-spacing: -0.03em; text-align: center;">Most likely moves this window</h2>
+    <p style="margin: 0 auto; max-width: 46ch; text-align: center; font-size: 21px; line-height: 1.5; letter-spacing: -0.01em; color: #6E6E73;">{{ boardStandfirst }}</p>
+  </div>
+  <div role="list" style="margin-top: clamp(32px, 4vw, 56px); display: flex; gap: 20px; overflow-x: auto; scroll-snap-type: x mandatory; padding-inline: max(5vw, 24px); padding-bottom: 16px; scrollbar-width: thin;">
+    <sc-for list="{{ board }}" as="card" hint-placeholder-count="5">
+      <a role="listitem" href="#explain" style="flex: 0 0 260px; scroll-snap-align: start; height: 380px; border-radius: 18px; background: #FFFFFF; padding: 22px; display: grid; grid-template-rows: auto auto 1fr auto; gap: 14px; transition: transform 200ms ease; color: #1D1D1F;" style-hover="transform: translateY(-4px);">
+        <div style="font-size: 40px; line-height: 1; font-weight: 600; letter-spacing: -0.03em; color: {{ card.color }};">{{ card.pct }}</div>
+        <div style="width: 100%; aspect-ratio: 1; max-height: 180px; border-radius: 18px; background: #F5F5F7; display: grid; place-items: center; font-size: 32px; font-weight: 600; letter-spacing: -0.02em; color: #6E6E73;">{{ card.initials }}</div>
+        <div style="display: grid; gap: 4px; align-content: start;">
+          <div style="font-size: 21px; line-height: 1.15; font-weight: 600; letter-spacing: -0.02em;">{{ card.name }}</div>
+          <div style="font-size: 13px; line-height: 1.4; color: #6E6E73;">{{ card.route }}</div>
+        </div>
+        <div style="font-size: 13px; line-height: 1.4; color: #6E6E73;">{{ card.updated }}</div>
+      </a>
+    </sc-for>
+  </div>
+</section>
+
+<section id="explain" style="background: #1D1D1F; color: #F5F5F7; padding-block: clamp(72px, 9vw, 120px);">
+  <div style="max-width: 1360px; margin-inline: auto; padding-inline: 5vw; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: clamp(32px, 5vw, 72px); align-items: center;">
+    <div style="width: 100%; height: clamp(320px, 46vw, 560px); background-image: repeating-linear-gradient(115deg, #26262A 0 12px, #202024 12px 24px); display: grid; place-items: end start; padding: 18px;">
+      <span style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; letter-spacing: 0.04em; color: #98989D;">half-bleed player photograph</span>
+    </div>
+    <div style="display: grid; gap: 28px; max-width: 560px;">
+      <div style="display: grid; gap: 12px;">
+        <h2 style="margin: 0; font-size: clamp(34px, 4.4vw, 56px); line-height: 1.05; font-weight: 600; letter-spacing: -0.03em;">Why 68%?</h2>
+        <p style="margin: 0; font-size: 17px; line-height: 1.6; color: #98989D; max-width: 68ch;">Four things move the number. Longer bars contribute more. The figure is the sum of them, not any single one.</p>
+      </div>
+      <div style="display: grid; gap: 20px;">
+        <sc-for list="{{ factors }}" as="f" hint-placeholder-count="4">
+          <div style="display: grid; gap: 8px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+              <span style="font-size: 17px; line-height: 1.4;">{{ f.label }}</span>
+              <span style="font-size: 13px; color: #98989D;">{{ f.direction }}</span>
+            </div>
+            <div style="height: 10px; border-radius: 9999px; background: #2A2A2E; overflow: hidden;">
+              <div style="height: 100%; width: {{ f.width }}; background: {{ f.color }}; border-radius: 9999px;"></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="clubs" style="background: #FFFFFF; padding-block: clamp(72px, 9vw, 120px);">
+  <div style="max-width: 1200px; margin-inline: auto; padding-inline: 5vw; display: grid; gap: 40px;">
+    <div style="display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 24px;">
+      <div style="display: grid; gap: 10px;">
+        <h2 style="margin: 0; font-size: clamp(34px, 4.4vw, 56px); line-height: 1.05; font-weight: 600; letter-spacing: -0.03em;">Club view</h2>
+        <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+          <span style="display: inline-flex; align-items: center; height: 34px; padding-inline: 12px; border-radius: 8px; border: 1px solid #D2D2D7; font-size: 13px; font-weight: 600; letter-spacing: -0.01em;">{{ clubName }}</span>
+          <span style="font-size: 17px; color: #6E6E73;">{{ clubSummary }}</span>
+        </div>
+      </div>
+      <label style="display: grid; gap: 6px; font-size: 13px; color: #6E6E73;">
+        Select a club
+        <select value="{{ clubKey }}" onChange="{{ onClub }}" style="appearance: none; height: 44px; min-width: 240px; padding-inline: 16px; border-radius: 8px; border: 1px solid #D2D2D7; background: #FFFFFF; color: #1D1D1F; font: inherit; font-size: 17px; letter-spacing: -0.01em;">
+          <sc-for list="{{ clubs }}" as="c" hint-placeholder-count="4">
+            <option value="{{ c.key }}">{{ c.name }}</option>
+          </sc-for>
+        </select>
+      </label>
+    </div>
+    <div style="display: grid; opacity: {{ clubOpacity }}; transition: opacity 180ms ease;">
+      <sc-for list="{{ clubRows }}" as="r" hint-placeholder-count="6">
+        <div style="display: grid; grid-template-columns: 40px minmax(140px, 1.1fr) minmax(0, 0.7fr) minmax(120px, 1.6fr); align-items: center; gap: clamp(12px, 2vw, 28px); padding-block: 18px; border-bottom: 1px solid #D2D2D7;">
+          <span style="width: 40px; height: 40px; border-radius: 9999px; background: #F5F5F7; display: grid; place-items: center; font-size: 13px; font-weight: 600; color: #6E6E73;">{{ r.initials }}</span>
+          <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.01em;">{{ r.name }}</span>
+          <span style="font-size: 13px; color: #6E6E73;">{{ r.position }}</span>
+          <span style="display: flex; align-items: center; gap: 16px;">
+            <span style="flex: 1; height: 8px; border-radius: 9999px; background: #F5F5F7; overflow: hidden;"><span style="display: block; height: 100%; width: {{ r.width }}; background: {{ r.color }}; border-radius: 9999px;"></span></span>
+            <span style="width: 4ch; text-align: right; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; color: {{ r.color }};">{{ r.pct }}</span>
+          </span>
+        </div>
+      </sc-for>
+      <sc-if value="{{ clubEmpty }}" hint-placeholder-val="{{ false }}">
+        <p style="margin: 24px 0 0; font-size: 17px; color: #6E6E73;">No moves above 20% at this club.</p>
+      </sc-if>
+    </div>
+  </div>
+</section>
+
+<section id="method" style="background: #F5F5F7; padding-block: clamp(72px, 9vw, 120px);">
+  <div style="max-width: 1200px; margin-inline: auto; padding-inline: 5vw; display: grid; gap: clamp(32px, 5vw, 56px);">
+    <h2 style="margin: 0; max-width: 20ch; font-size: clamp(34px, 4.4vw, 56px); line-height: 1.05; font-weight: 600; letter-spacing: -0.03em;">How we know we're not just guessing</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: clamp(32px, 5vw, 64px); align-items: start;">
+      <div style="display: grid; gap: 20px; max-width: 68ch;">
+        <p style="margin: 0; font-size: 17px; line-height: 1.6;">A prediction is only useful if it is calibrated: when we say 70%, roughly seven of every ten of those moves should happen. The curve on the right plots what we said against what happened across 1,340 completed transfers since 2019.</p>
+        <p style="margin: 0; font-size: 17px; line-height: 1.6;">We over-predict in the 30–50% band. Deals that stall in that range tend to die quietly rather than resolve, and the model still reads the noise around them as momentum. Of last window's twenty highest-rated moves, sixteen completed against nine for a naive baseline that simply follows contract length.</p>
+        <sc-if value="{{ showMisses }}" hint-placeholder-val="{{ true }}">
+          <p style="margin: 0; font-size: 17px; line-height: 1.6;">The misses: we had Gibbs-White at 88% to Tottenham and he stayed; Branthwaite at 24% two weeks before he left. Both were failures of the same kind — we weight reported fees heavily, and both stories were being briefed by agents rather than clubs.</p>
+        </sc-if>
+        <p style="margin: 0; font-size: 13px; line-height: 1.4; color: #6E6E73;">Retrained weekly. Features: contract months remaining, minutes trend, squad-cost share, PSR headroom, age curve, reported-fee dispersion.</p>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 32px;">
+        <figure style="margin: 0; display: grid; gap: 12px;">
+          <svg viewBox="0 0 260 200" width="100%" height="auto" role="img" aria-label="Calibration curve: predicted probability against observed rate, close to the ideal diagonal with over-prediction between 30 and 50 percent." style="overflow: visible;">
+            <line x1="20" y1="180" x2="240" y2="20" stroke="#6E6E73" stroke-width="1" stroke-dasharray="4 4"></line>
+            <polyline points="20,178 64,150 108,128 152,80 196,44 240,26" fill="none" stroke="#1D1D1F" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>
+            <line x1="20" y1="180" x2="240" y2="180" stroke="#D2D2D7" stroke-width="1"></line>
+            <line x1="20" y1="20" x2="20" y2="180" stroke="#D2D2D7" stroke-width="1"></line>
+            <text x="20" y="196" font-size="10" fill="#6E6E73">0%</text>
+            <text x="228" y="196" font-size="10" fill="#6E6E73">100%</text>
+          </svg>
+          <figcaption style="font-size: 13px; line-height: 1.4; color: #6E6E73;">Calibration. Solid line is the model, dashed is perfect agreement.</figcaption>
+        </figure>
+        <figure style="margin: 0; display: grid; gap: 12px; align-content: start;">
+          <div style="display: grid; gap: 14px;">
+            <div style="display: grid; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; font-size: 13px; color: #6E6E73;"><span>Transfer Room</span><span style="color: #1D1D1F; font-weight: 600;">16 / 20</span></div>
+              <div style="height: 10px; background: #E6E6EA; border-radius: 9999px; overflow: hidden;"><div style="width: 80%; height: 100%; background: #1D1D1F;"></div></div>
+            </div>
+            <div style="display: grid; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; font-size: 13px; color: #6E6E73;"><span>Contract-length baseline</span><span style="color: #1D1D1F; font-weight: 600;">9 / 20</span></div>
+              <div style="height: 10px; background: #E6E6EA; border-radius: 9999px; overflow: hidden;"><div style="width: 45%; height: 100%; background: #6E6E73;"></div></div>
+            </div>
+          </div>
+          <figcaption style="font-size: 13px; line-height: 1.4; color: #6E6E73;">Precision at 20, summer 2026 window.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer style="background: #FFFFFF; border-top: 1px solid #D2D2D7; padding-block: 40px;">
+  <div style="max-width: 1200px; margin-inline: auto; padding-inline: 5vw; display: flex; flex-wrap: wrap; gap: 12px 32px; justify-content: space-between; font-size: 13px; line-height: 1.4; color: #6E6E73;">
+    <span>Sources: club filings, registered agent disclosures, reported-fee tracking · Updated 4 min ago</span>
+    <span>Predictions are statistical estimates for entertainment. Not betting advice.</span>
+  </div>
+</footer>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;heroProbability&quot;: { &quot;editor&quot;: &quot;int&quot;, &quot;default&quot;: 68, &quot;min&quot;: 0, &quot;max&quot;: 100, &quot;unit&quot;: &quot;%&quot;, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Data&quot; },
+  &quot;boardSort&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;Probability&quot;, &quot;options&quot;: [&quot;Probability&quot;, &quot;Closest deadline&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Data&quot; },
+  &quot;countUp&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Behaviour&quot; },
+  &quot;showMisses&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Content&quot; }
+}">
+const RAMP = [[0, '#8E8E93'], [20, '#B8791F'], [50, '#C4442E'], [85, '#1D7A3E'], [100, '#1D7A3E']];
+
+function ramp(p) {
+  const v = Math.max(0, Math.min(100, p));
+  for (let i = 0; i < RAMP.length - 1; i++) {
+    const [a, ca] = RAMP[i], [b, cb] = RAMP[i + 1];
+    if (v <= b) {
+      const t = b === a ? 0 : (v - a) / (b - a);
+      return `color-mix(in oklch, ${ca} ${Math.round((1 - t) * 100)}%, ${cb})`;
+    }
+  }
+  return RAMP[RAMP.length - 1][1];
+}
+
+const initials = (n) => n.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('');
+
+const BOARD = [
+  { name: 'Marc Guéhi', pct: 91, route: 'Crystal Palace → Real Madrid', updated: 'Updated 4 min ago', days: 9 },
+  { name: 'Morgan Gibbs-White', pct: 84, route: 'Nottingham Forest → Tottenham', updated: 'Updated 12 min ago', days: 21 },
+  { name: 'Bruno Guimarães', pct: 76, route: 'Newcastle → Paris Saint-Germain', updated: 'Updated 26 min ago', days: 4 },
+  { name: 'Yves Bissouma', pct: 71, route: 'Tottenham → Galatasaray', updated: 'Updated 40 min ago', days: 33 },
+  { name: 'Alexander Isak', pct: 68, route: 'Newcastle → Liverpool', updated: 'Updated 4 min ago', days: 73 },
+  { name: 'Antony', pct: 64, route: 'Manchester United → Real Betis', updated: 'Updated 1 hr ago', days: 15 },
+  { name: 'Jarrad Branthwaite', pct: 52, route: 'Everton → Manchester United', updated: 'Updated 2 hr ago', days: 46 },
+  { name: 'Eberechi Eze', pct: 38, route: 'Crystal Palace → Arsenal', updated: 'Updated 2 hr ago', days: 58 },
+];
+
+const CLUBS = [
+  { key: 'newcastle', name: 'Newcastle', summary: '4 likely out · 2 likely in', rows: [
+    { name: 'Bruno Guimarães', position: 'Midfield', pct: 76 },
+    { name: 'Alexander Isak', position: 'Forward', pct: 68 },
+    { name: 'Sean Longstaff', position: 'Midfield', pct: 41 },
+    { name: 'Callum Wilson', position: 'Forward', pct: 33 },
+    { name: 'João Pedro', position: 'Forward · incoming', pct: 57 },
+    { name: 'Antonee Robinson', position: 'Defence · incoming', pct: 29 },
+  ] },
+  { key: 'chelsea', name: 'Chelsea', summary: '5 likely out · 1 likely in', rows: [
+    { name: 'Raheem Sterling', position: 'Forward', pct: 88 },
+    { name: 'Axel Disasi', position: 'Defence', pct: 74 },
+    { name: 'Christopher Nkunku', position: 'Forward', pct: 61 },
+    { name: 'Carney Chukwuemeka', position: 'Midfield', pct: 47 },
+    { name: 'Renato Veiga', position: 'Defence', pct: 26 },
+    { name: 'Xavi Simons', position: 'Midfield · incoming', pct: 54 },
+  ] },
+  { key: 'manutd', name: 'Manchester United', summary: '3 likely out · 3 likely in', rows: [
+    { name: 'Antony', position: 'Forward', pct: 64 },
+    { name: 'Casemiro', position: 'Midfield', pct: 58 },
+    { name: 'Kobbie Mainoo', position: 'Midfield', pct: 22 },
+    { name: 'Jarrad Branthwaite', position: 'Defence · incoming', pct: 52 },
+    { name: 'Adam Wharton', position: 'Midfield · incoming', pct: 44 },
+    { name: 'Nico Williams', position: 'Forward · incoming', pct: 31 },
+  ] },
+  { key: 'brentford', name: 'Brentford', summary: 'Nothing above 20%', rows: [] },
+];
+
+class Component extends DCLogic {
+  state = { pct: 0, clubKey: 'newcastle', fading: false };
+
+  componentDidMount() {
+    const target = this.target();
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || this.props.countUp === false) { this.setState({ pct: target }); return; }
+    const start = performance.now(), dur = 900;
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / dur);
+      this.setState({ pct: Math.round(target * (1 - Math.pow(1 - t, 3))) });
+      if (t < 1) this._raf = requestAnimationFrame(step);
+    };
+    this._raf = requestAnimationFrame(step);
+  }
+
+  componentWillUnmount() { cancelAnimationFrame(this._raf); clearTimeout(this._t); }
+
+  target() {
+    const p = Number(this.props.heroProbability);
+    return Number.isFinite(p) ? Math.max(0, Math.min(100, Math.round(p))) : 68;
+  }
+
+  selectClub = (e) => {
+    const clubKey = e.target.value;
+    this.setState({ fading: true });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ clubKey, fading: false }), 180);
+  };
+
+  renderVals() {
+    const target = this.target();
+    const shown = Math.max(this.state.pct, 0);
+    const sort = this.props.boardSort === 'Closest deadline' ? 'days' : 'pct';
+    const board = BOARD.slice().sort((a, b) => sort === 'days' ? a.days - b.days : b.pct - a.pct)
+      .map(c => ({ ...c, pct: c.pct + '%', color: ramp(c.pct), initials: initials(c.name) }));
+
+    const club = CLUBS.find(c => c.key === this.state.clubKey) || CLUBS[0];
+    const clubRows = club.rows.slice().sort((a, b) => b.pct - a.pct)
+      .map(r => ({ ...r, initials: initials(r.name), width: r.pct + '%', color: ramp(r.pct), pct: r.pct + '%' }));
+
+    const factors = [
+      { label: 'Contract runs out in 11 months', weight: 92, up: true },
+      { label: 'Playing 40% fewer minutes than last season', weight: 61, up: true },
+      { label: 'Club needs to sell before June 30', weight: 44, up: true },
+      { label: 'Signed a new deal 14 months ago', weight: 12, up: false },
+    ];
+
+    return {
+      heroText: shown + '%',
+      heroColor: ramp(this.state.pct >= target ? target : shown),
+      boardStandfirst: sort === 'days' ? 'Ordered by how soon we expect the deal to close.' : 'Ordered by probability. Every figure is a model output, not a report.',
+      board,
+      factors: factors.map(f => ({ label: f.label, direction: f.up ? 'raises' : 'lowers', width: f.weight + '%', color: f.up ? '#C4442E' : '#A1A1A6' })),
+      clubs: CLUBS.map(c => ({ key: c.key, name: c.name })),
+      clubKey: this.state.clubKey,
+      clubName: club.name,
+      clubSummary: club.summary,
+      clubRows,
+      clubEmpty: clubRows.length === 0,
+      clubOpacity: this.state.fading ? 0 : 1,
+      onClub: this.selectClub,
+      showMisses: this.props.showMisses !== false,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

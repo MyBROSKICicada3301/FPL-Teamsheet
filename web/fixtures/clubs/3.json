@@ -1,0 +1,67 @@
+{
+  "club": {
+    "id": 3,
+    "name": "Arsenal"
+  },
+  "summary": {
+    "out": 3,
+    "in": 2
+  },
+  "movements": [
+    {
+      "player_id": 4402,
+      "name": "Robert Davis",
+      "position": "Midfield",
+      "direction": "out",
+      "p_exit": 0.84,
+      "band": "hot",
+      "image": {
+        "square": null
+      }
+    },
+    {
+      "player_id": 4407,
+      "name": "Matthew Jackson",
+      "position": "Midfield",
+      "direction": "out",
+      "p_exit": 0.52,
+      "band": "hot",
+      "image": {
+        "square": null
+      }
+    },
+    {
+      "player_id": 4410,
+      "name": "Paul Martin",
+      "position": "Defence",
+      "direction": "out",
+      "p_exit": 0.17,
+      "band": "cold",
+      "image": {
+        "square": null
+      }
+    },
+    {
+      "player_id": 4403,
+      "name": "William Wilson",
+      "position": "Forward",
+      "direction": "in",
+      "p_exit": 0.76,
+      "band": "hot",
+      "image": {
+        "square": null
+      }
+    },
+    {
+      "player_id": 4406,
+      "name": "Daniel Thomas",
+      "position": "Defence",
+      "direction": "in",
+      "p_exit": 0.64,
+      "band": "hot",
+      "image": {
+        "square": null
+      }
+    }
+  ]
+}

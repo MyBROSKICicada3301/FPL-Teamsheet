@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transfer Room — Premier League transfer probabilities</title>
+<meta name="description" content="Calibrated probabilities for player movement in and out of the Premier League.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+
+<a class="skip" href="#top">Skip to content</a>
+
+<nav class="nav" aria-label="Sections">
+  <a class="nav__brand" href="#top"><span class="nav__dot" aria-hidden="true"></span>Transfer Room</a>
+  <ul class="nav__links">
+    <li><a href="#players">Players</a></li>
+    <li><a href="#clubs">Clubs</a></li>
+    <li><a href="#method">Method</a></li>
+  </ul>
+</nav>
+
+<main>
+
+  <!-- §1 Hero — the whole argument in one screen. -->
+  <section class="section section--hero" id="top">
+    <div class="wrap hero">
+      <figure class="hero__figure" id="hero-figure">
+        <!-- Replaced with the licensed cutout when the feed supplies one.
+             Until then the initials monogram is the deliberate fallback. -->
+      </figure>
+
+      <div class="hero__type">
+        <h1 class="hero__headline" id="hero-headline">
+          <span class="hero__line">Loading the board.</span>
+          <span class="hero__line">One moment.</span>
+        </h1>
+        <div class="hero__readout">
+          <p class="hero__pct" id="hero-pct" aria-describedby="hero-caption">—</p>
+          <p class="hero__caption caption" id="hero-caption">likelihood of a summer exit</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="state state--error" id="hero-error" hidden>
+      Predictions didn’t load. <button type="button" class="retry" id="hero-retry">Retry</button>
+    </p>
+  </section>
+
+  <!-- §2 The board -->
+  <section class="section section--mist" id="players">
+    <div class="wrap board__head">
+      <h2 class="display">Most likely moves this window</h2>
+      <p class="lead" id="board-standfirst">Ordered by probability. Every figure is a model output, not a report.</p>
+    </div>
+
+    <div class="board__scroller" id="board" role="list"
+         aria-label="Most likely moves this window, ordered by probability">
+    </div>
+  </section>
+
+  <!-- §3 The explanation -->
+  <section class="section section--ink" id="explain">
+    <div class="explain">
+      <figure class="explain__figure" id="explain-figure"></figure>
+
+      <div class="explain__body">
+        <h2 class="display" id="explain-heading">Why?</h2>
+        <p class="body explain__standfirst" id="explain-standfirst">
+          A handful of things move the number. Longer bars contribute more.
+        </p>
+        <ul class="factors" id="factors"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- §4 Club view -->
+  <section class="section section--paper" id="clubs">
+    <div class="wrap">
+      <div class="clubs__head">
+        <div class="clubs__title">
+          <h2 class="display">Club view</h2>
+          <p class="clubs__summary"><span class="lockup" id="club-name">—</span>
+            <span class="body" id="club-summary"></span></p>
+        </div>
+
+        <label class="field">
+          <span class="caption">Select a club</span>
+          <select id="club-select"></select>
+        </label>
+      </div>
+
+      <div class="rows" id="club-rows"></div>
+      <p class="state state--left" id="club-empty" hidden>No moves above 20% at this club.</p>
+    </div>
+  </section>
+
+  <!-- §5 Method -->
+  <section class="section section--mist" id="method">
+    <div class="wrap method">
+      <h2 class="display method__heading">How we know we’re not just guessing</h2>
+
+      <div class="method__grid">
+        <div class="method__prose" id="method-prose"></div>
+
+        <div class="method__charts">
+          <figure class="chart">
+            <svg id="calibration" viewBox="0 0 260 200" role="img"
+                 aria-labelledby="calibration-desc"></svg>
+            <figcaption class="caption" id="calibration-desc">
+              Calibration. Solid line is the model, dashed is perfect agreement.
+            </figcaption>
+          </figure>
+
+          <figure class="chart">
+            <div class="precision" id="precision"></div>
+            <figcaption class="caption" id="precision-caption">Precision at 20.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__inner">
+    <p class="caption" id="footer-sources">Sources · Updated —</p>
+    <p class="caption">Predictions are statistical estimates for entertainment. Not betting advice.</p>
+  </div>
+</footer>
+
+<script src="./app.js" type="module"></script>
+</body>
+</html>

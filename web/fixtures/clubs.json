@@ -1,0 +1,20 @@
+{
+  "clubs": [
+    {
+      "id": 1,
+      "name": "Manchester United"
+    },
+    {
+      "id": 2,
+      "name": "Chelsea"
+    },
+    {
+      "id": 3,
+      "name": "Arsenal"
+    },
+    {
+      "id": 4,
+      "name": "Manchester City"
+    }
+  ]
+}

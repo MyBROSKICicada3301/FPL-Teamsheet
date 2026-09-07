@@ -1,0 +1,447 @@
+/* Transfer Room — implements DESIGN.md §2 and §6.
+   The interface is quiet so the numbers can be loud. */
+
+/* ---------------------------------------------------------------- tokens */
+
+:root {
+  --ink:      #1D1D1F;
+  --paper:    #FFFFFF;
+  --mist:     #F5F5F7;
+  --slate:    #6E6E73;
+  --hairline: #D2D2D7;
+
+  /* The probability ramp. Colour encodes likelihood and nothing else.
+     Interpolated in OKLCH by app.js; these are the band anchors. */
+  --p-cold: #8E8E93;   /* under 20% — noise */
+  --p-warm: #B8791F;   /* 20–50% — live but unresolved */
+  --p-hot:  #C4442E;   /* 50–85% — expect movement */
+  --p-done: #1D7A3E;   /* over 85% — effectively agreed */
+
+  /* Per-section surface, so one set of rules serves light and dark. */
+  --surface: var(--paper);
+  --text:    var(--ink);
+  --muted:   var(--slate);
+  --rule:    var(--hairline);
+  --fill:    var(--mist);
+
+  /* Modular scale, ratio 1.25, base 17px. */
+  --t-hero:    88px;
+  --t-display: 56px;
+  --t-title:   32px;
+  --t-lead:    21px;
+  --t-body:    17px;
+  --t-caption: 13px;
+
+  --lh-hero: 0.95;   --tr-hero: -0.035em;
+  --lh-display: 1.05; --tr-display: -0.03em;
+  --lh-title: 1.15;  --tr-title: -0.02em;
+  --lh-lead: 1.5;    --tr-lead: -0.01em;
+  --lh-body: 1.6;
+  --lh-caption: 1.4;
+
+  /* One radius family: 18px on cards, 8px on inputs, nothing else. */
+  --r-card: 18px;
+  --r-input: 8px;
+
+  --gutter: 24px;
+  --measure: 68ch;
+
+  --section-pad: 120px;
+}
+
+/* Below 768px the hero drops to 44 and display to 34. Everything else holds. */
+@media (max-width: 767px) {
+  :root {
+    --t-hero: 44px;
+    --t-display: 34px;
+    --section-pad: 72px;
+  }
+}
+
+/* Dark sections. The ramp stays identical except --p-cold, which is lifted to
+   hold contrast against --ink. */
+.section--ink {
+  --surface: var(--ink);
+  --text:    #F5F5F7;
+  --muted:   #98989D;
+  --rule:    #3A3A3C;
+  --fill:    #26262A;
+  --p-cold:  #A1A1A6;
+}
+
+/* ------------------------------------------------------------------ base */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "SF Pro Display", "Inter Tight", -apple-system, BlinkMacSystemFont,
+               "Helvetica Neue", sans-serif;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  /* Probabilities change on refresh; digits must not reflow. */
+  font-variant-numeric: tabular-nums;
+}
+
+h1, h2, h3, p, ul, figure { margin: 0; }
+ul { padding: 0; list-style: none; }
+img { max-width: 100%; display: block; }
+
+a { color: inherit; text-decoration: none; }
+
+:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+::selection { background: var(--hairline); color: var(--ink); }
+
+.skip {
+  position: absolute; left: -9999px; top: 0; z-index: 100;
+  background: var(--ink); color: var(--paper);
+  padding: 12px 16px; border-radius: var(--r-input);
+}
+.skip:focus { left: 12px; top: 12px; }
+
+/* Meters and portrait wells are spans so they can sit inside inline content,
+   which means they need an explicit box before width/height apply to them. */
+.card__face, .row__face,
+.factor__track, .factor__bar,
+.row__track, .row__bar,
+.precision__track, .precision__bar { display: block; }
+
+/* --------------------------------------------------------------- helpers */
+
+.display {
+  font-size: var(--t-display); line-height: var(--lh-display);
+  font-weight: 600; letter-spacing: var(--tr-display);
+  text-wrap: balance;
+}
+.lead {
+  font-size: var(--t-lead); line-height: var(--lh-lead);
+  letter-spacing: var(--tr-lead); color: var(--muted);
+}
+.body { font-size: var(--t-body); line-height: var(--lh-body); }
+.caption {
+  font-size: var(--t-caption); line-height: var(--lh-caption); color: var(--muted);
+}
+
+/* Content grid: 12 columns, 1200px max, 24px gutters, 5vw side margin under. */
+.wrap {
+  width: 100%; max-width: 1200px; margin-inline: auto;
+  padding-inline: max(5vw, var(--gutter));
+}
+
+/* Vertical rhythm is defined once here and never overridden per section.
+   Inner content spacing is what gets adjusted. */
+.section {
+  padding-block: var(--section-pad);
+  background: var(--surface);
+  color: var(--text);
+}
+.section--mist  { --surface: var(--mist); }
+.section--paper { --surface: var(--paper); }
+
+/* ------------------------------------------------------------------- nav */
+
+.nav {
+  position: sticky; top: 0; z-index: 20;
+  height: 48px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--gutter);
+  padding-inline: max(5vw, var(--gutter));
+  border-bottom: 1px solid var(--hairline);
+  /* Fallback fill first for browsers without backdrop-filter. */
+  background: rgba(255, 255, 255, 0.92);
+}
+@supports (backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px)) {
+  .nav {
+    background: rgba(255, 255, 255, 0.72);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+}
+
+.nav__brand {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 15px; font-weight: 600; letter-spacing: -0.01em;
+}
+.nav__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
+
+.nav__links { display: flex; align-items: center; gap: 28px; }
+.nav__links a { font-size: var(--t-caption); color: var(--slate); }
+.nav__links a:hover { color: var(--ink); }
+
+/* ------------------------------------------------------------------ §1 hero */
+
+.section--hero {
+  position: relative;
+  /* Barely visible. If it reads as a gradient, it is too strong. */
+  background: radial-gradient(60% 50% at 50% 45%, var(--mist), var(--paper));
+}
+
+.hero { display: grid; justify-items: center; position: relative; }
+
+.hero__figure {
+  width: min(560px, 88%);
+  height: min(720px, 60vh);
+  display: grid; place-items: center;
+}
+
+/* Missing player: initials, not a silhouette. Around 15% of squad players will
+   not have a usable image and it needs to look deliberate. */
+.monogram {
+  display: grid; place-items: center;
+  width: 100%; height: 100%;
+  background: var(--fill);
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: var(--tr-title);
+}
+.monogram--hero {
+  border-radius: 0;
+  font-size: clamp(72px, 14vw, 168px);
+  background: linear-gradient(180deg, var(--fill), transparent 78%);
+}
+.monogram--square { border-radius: var(--r-card); font-size: var(--t-title); }
+.monogram--row    { border-radius: 50%; font-size: var(--t-caption); }
+
+.hero__type {
+  display: grid; justify-items: center; gap: 32px;
+  /* Type overlaps the player's chest and shoulders, not the face. */
+  margin-top: -14vh;
+  position: relative;
+}
+
+.hero__headline {
+  font-size: var(--t-hero); line-height: var(--lh-hero);
+  font-weight: 600; letter-spacing: var(--tr-hero);
+  text-align: center; text-wrap: balance;
+  max-width: 15ch;
+}
+.hero__line { display: block; }
+
+.hero__readout { display: grid; justify-items: center; gap: 6px; }
+
+.hero__pct {
+  font-size: var(--t-hero); line-height: 1;
+  font-weight: 600; letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "ss01";   /* flat-topped figures where SF Pro exists */
+  color: var(--ramp, var(--ink));
+}
+
+/* Page-load sequence. The only non-user-triggered motion on the site. */
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+.hero__figure   { animation: rise 600ms ease-out both; }
+.hero__line:nth-child(1) { animation: rise 600ms ease-out 120ms both; }
+.hero__line:nth-child(2) { animation: rise 600ms ease-out 240ms both; }
+.hero__readout  { animation: rise 600ms ease-out 360ms both; }
+
+/* ----------------------------------------------------------------- §2 board */
+
+.board__head { display: grid; gap: 12px; justify-items: center; text-align: center; }
+.board__head .lead { max-width: 46ch; }
+
+.board__scroller {
+  margin-top: 56px;
+  display: flex; gap: 20px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-inline: max(5vw, var(--gutter));
+  padding-block-end: 16px;
+  scrollbar-width: thin;
+}
+
+/* Cards separate by fill contrast. No border, no shadow. */
+.card {
+  flex: 0 0 260px;
+  height: 380px;
+  scroll-snap-align: start;
+  border-radius: var(--r-card);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 22px;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 14px;
+  transition: transform 200ms ease;
+}
+/* The entire hover treatment. */
+.card:hover { transform: translateY(-4px); }
+
+.card__pct {
+  font-size: 40px; line-height: 1; font-weight: 600;
+  letter-spacing: var(--tr-display);
+  color: var(--ramp);
+}
+.card__face { width: 100%; aspect-ratio: 1; max-height: 180px; }
+.card__face img, .card__face .monogram { width: 100%; height: 100%; border-radius: var(--r-card); object-fit: cover; }
+.card__body { display: grid; gap: 4px; align-content: start; }
+.card__name {
+  font-size: var(--t-lead); line-height: var(--lh-title);
+  font-weight: 600; letter-spacing: var(--tr-title);
+}
+.card__route { font-size: var(--t-caption); line-height: var(--lh-caption); color: var(--slate); }
+
+/* ----------------------------------------------------------- §3 explanation */
+
+/* Half-bleed: the photograph runs to the left edge of the viewport, the
+   factor list keeps the normal side margin. */
+.explain {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(32px, 5vw, 72px);
+  align-items: center;
+}
+.explain__figure { width: 100%; height: clamp(320px, 46vw, 560px); }
+.explain__body {
+  display: grid; gap: 28px; max-width: 560px;
+  padding-inline-end: max(5vw, var(--gutter));
+}
+
+@media (max-width: 860px) {
+  .explain { grid-template-columns: 1fr; }
+  .explain__body { padding-inline: max(5vw, var(--gutter)); }
+}
+.explain__standfirst { color: var(--muted); max-width: var(--measure); }
+
+.factors { display: grid; gap: 20px; }
+.factor { display: grid; gap: 8px; }
+.factor__head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+}
+.factor__label { font-size: var(--t-body); line-height: var(--lh-caption); }
+.factor__dir { font-size: var(--t-caption); color: var(--muted); }
+/* The magnitude is the bar length; no number is printed on it. */
+.factor__track { height: 10px; border-radius: 999px; background: var(--fill); overflow: hidden; }
+.factor__bar { height: 100%; border-radius: 999px; background: var(--ramp); }
+
+/* ------------------------------------------------------------ §4 club view */
+
+.clubs__head {
+  display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between;
+  gap: var(--gutter);
+  margin-block-end: 40px;
+}
+.clubs__title { display: grid; gap: 10px; }
+.clubs__summary { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+/* Club crests are trademarked; a text lockup carries the identity instead. */
+.lockup {
+  display: inline-flex; align-items: center; height: 34px; padding-inline: 12px;
+  border-radius: var(--r-input); border: 1px solid var(--hairline);
+  font-size: var(--t-caption); font-weight: 600; letter-spacing: -0.01em;
+}
+
+.field { display: grid; gap: 6px; }
+.field select {
+  appearance: none;
+  height: 44px; min-width: 240px; padding-inline: 16px;
+  border-radius: var(--r-input); border: 1px solid var(--hairline);
+  background: var(--paper); color: var(--ink);
+  font: inherit; font-size: var(--t-body); letter-spacing: -0.01em;
+}
+
+/* User-triggered, so it may animate: a cross-fade, no slide. */
+.rows { display: grid; transition: opacity 180ms ease; }
+.rows[data-fading="true"] { opacity: 0; }
+
+.row {
+  display: grid;
+  grid-template-columns: 40px minmax(140px, 1.1fr) minmax(0, 0.7fr) minmax(120px, 1.6fr);
+  align-items: center;
+  gap: clamp(12px, 2vw, 28px);
+  padding-block: 18px;
+  border-bottom: 1px solid var(--hairline);
+}
+.row__face { width: 40px; height: 40px; }
+.row__face img, .row__face .monogram { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.row__name { font-size: var(--t-body); font-weight: 600; letter-spacing: -0.01em; }
+.row__pos { font-size: var(--t-caption); color: var(--slate); }
+.row__meter { display: flex; align-items: center; gap: 16px; }
+.row__track { flex: 1; height: 8px; border-radius: 999px; background: var(--mist); overflow: hidden; }
+.row__bar { height: 100%; border-radius: 999px; background: var(--ramp); }
+/* Tabular numerals hold the right edge still as you scan down.
+   The numeral is --ink, not the ramp: at 17px it is body text and needs 4.5:1,
+   which --p-cold (3.26:1) and --p-warm (3.63:1) do not reach on --paper. §4
+   asks for a bar with the value at the right edge and does not colour the
+   value, so the meter carries the encoding and the number stays readable. */
+.row__pct {
+  width: 4ch; text-align: right;
+  font-size: var(--t-body); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .row { grid-template-columns: 40px 1fr; row-gap: 10px; }
+  .row__pos { grid-column: 2; }
+  .row__meter { grid-column: 1 / -1; }
+}
+
+/* --------------------------------------------------------------- §5 method */
+
+/* Left-aligned. Centring this would make it unreadable. */
+.method { display: grid; gap: clamp(32px, 5vw, 56px); }
+.method__heading { max-width: 20ch; }
+.method__grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: clamp(32px, 5vw, 64px);
+  align-items: start;
+}
+.method__prose { display: grid; gap: 20px; max-width: var(--measure); }
+.method__charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 32px; }
+
+.chart { display: grid; gap: 12px; align-content: start; }
+.chart svg { width: 100%; height: auto; overflow: visible; }
+
+.precision { display: grid; gap: 14px; }
+.precision__row { display: grid; gap: 6px; }
+.precision__head { display: flex; justify-content: space-between; font-size: var(--t-caption); color: var(--muted); }
+.precision__head b { color: var(--ink); font-weight: 600; }
+.precision__track { height: 10px; border-radius: 999px; background: #E6E6EA; overflow: hidden; }
+.precision__bar { height: 100%; background: var(--ink); }
+.precision__bar--baseline { background: var(--slate); }
+
+/* ---------------------------------------------------------------- states */
+
+.state { margin-top: 24px; font-size: var(--t-body); color: var(--muted); text-align: center; }
+.state--error { color: var(--ink); }
+/* Sits where left-aligned rows would be, so it lines up with them. */
+.state--left { text-align: left; }
+
+.retry {
+  font: inherit; color: inherit;
+  background: none; border: 0; padding: 0;
+  text-decoration: underline; text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.card--skeleton, .row--skeleton { opacity: 0.4; }
+
+/* ---------------------------------------------------------------- footer */
+
+.footer { background: var(--paper); border-top: 1px solid var(--hairline); padding-block: 40px; }
+.footer__inner {
+  display: flex; flex-wrap: wrap; gap: 12px 32px; justify-content: space-between;
+}
+
+/* ------------------------------------------------------- reduced motion */
+
+/* Everything appears at final state. The number must be correct instantly,
+   not animated into place. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

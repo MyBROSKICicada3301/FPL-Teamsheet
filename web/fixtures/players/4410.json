@@ -1,0 +1,45 @@
+{
+  "player_id": 4410,
+  "name": "Paul Martin",
+  "position": "DF",
+  "club": {
+    "id": 3,
+    "name": "Arsenal"
+  },
+  "p_exit": 0.17,
+  "band": "cold",
+  "predicted_fee_eur": 6000000,
+  "factors": [
+    {
+      "label": "Third choice in his position",
+      "contribution": 0.05
+    },
+    {
+      "label": "Contract runs out in 31 months",
+      "contribution": 0.02
+    },
+    {
+      "label": "Age 22 \u2014 below peak resale",
+      "contribution": -0.04
+    },
+    {
+      "label": "Signed a new deal 6 months ago",
+      "contribution": -0.11
+    },
+    {
+      "label": "Club has no replacement in the squad",
+      "contribution": -0.14
+    }
+  ],
+  "recent_rumours": [
+    {
+      "source": "The Wire Report",
+      "tier": 1,
+      "published_at": "2026-09-05T09:14:22Z"
+    }
+  ],
+  "image": {
+    "cutout": null,
+    "square": null
+  }
+}

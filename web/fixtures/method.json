@@ -1,0 +1,45 @@
+{
+  "model_version": "lgbm-2026.08.3",
+  "evaluated_on": "2026-09-07T09:14:22Z",
+  "n_transfers": 1340,
+  "since_season": "2019-20",
+  "brier": 0.11,
+  "calibration": [
+    {
+      "predicted": 0.05,
+      "observed": 0.04
+    },
+    {
+      "predicted": 0.2,
+      "observed": 0.19
+    },
+    {
+      "predicted": 0.4,
+      "observed": 0.31
+    },
+    {
+      "predicted": 0.6,
+      "observed": 0.55
+    },
+    {
+      "predicted": 0.8,
+      "observed": 0.78
+    },
+    {
+      "predicted": 0.95,
+      "observed": 0.93
+    }
+  ],
+  "precision_at_20": {
+    "model": 16,
+    "baseline": 9,
+    "n": 20,
+    "window": "summer 2026"
+  },
+  "notes": [
+    "A prediction is only useful if it is calibrated: when we say 70%, roughly seven of every ten of those moves should happen. The curve plots what we said against what happened across 1,340 completed transfers since 2019.",
+    "We over-predict in the 30\u201350% band. Deals that stall in that range tend to die quietly rather than resolve, and the model still reads the noise around them as momentum. Of last window's twenty highest-rated moves, sixteen completed against nine for a naive baseline that simply follows contract length."
+  ],
+  "misses": "The misses: we had Robert Davis at 88% to leave and he stayed; Anthony White at 24% two weeks before he went. Both were failures of the same kind \u2014 we weight reported fees heavily, and both stories were being briefed by agents rather than clubs.",
+  "footnote": "Retrained weekly. Features: contract months remaining, minutes trend, squad-cost share, spending-limit headroom, age curve, reported-fee dispersion."
+}

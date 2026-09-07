@@ -1,0 +1,45 @@
+{
+  "player_id": 4405,
+  "name": "Thomas Anderson",
+  "position": "FW",
+  "club": {
+    "id": 2,
+    "name": "Chelsea"
+  },
+  "p_exit": 0.68,
+  "band": "hot",
+  "predicted_fee_eur": 82000000,
+  "factors": [
+    {
+      "label": "Contract runs out in 11 months",
+      "contribution": 0.21
+    },
+    {
+      "label": "Playing 40% fewer minutes",
+      "contribution": 0.14
+    },
+    {
+      "label": "Club needs to sell before June 30",
+      "contribution": 0.09
+    },
+    {
+      "label": "Age 26 \u2014 peak resale value",
+      "contribution": 0.04
+    },
+    {
+      "label": "No credible bids reported",
+      "contribution": -0.06
+    }
+  ],
+  "recent_rumours": [
+    {
+      "source": "The Wire Report",
+      "tier": 1,
+      "published_at": "2026-09-05T09:14:22Z"
+    }
+  ],
+  "image": {
+    "cutout": null,
+    "square": null
+  }
+}
