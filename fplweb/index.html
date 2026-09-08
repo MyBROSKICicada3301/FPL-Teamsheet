@@ -3,103 +3,160 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FPL Assistant, next gameweek</title>
+<title>FPL Assistant, gameweek planner</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 
-<header class="top">
-  <div class="wrap">
-    <h1>FPL Assistant</h1>
-    <p class="sub">Transfers, captain and wildcard for the gameweek ahead, from live FPL data.</p>
-    <dl class="gw" id="gw-strip" hidden>
-      <div><dt>Gameweek</dt><dd id="gw-number">..</dd></div>
-      <div><dt>Deadline</dt><dd id="gw-deadline">..</dd></div>
-      <div><dt>Time left</dt><dd id="gw-countdown">..</dd></div>
-    </dl>
+<div class="topbar">
+  <div style="display:flex; align-items:baseline; gap:12px">
+    <span class="brand">FPL Assistant</span>
+    <span class="muted">Gameweek planner</span>
   </div>
-</header>
+  <div style="display:flex; gap:8px">
+    <button class="btn btn-secondary" id="refresh" type="button">Refresh data</button>
+  </div>
+</div>
 
-<main class="wrap">
+<div class="band" id="band" hidden>
+  <div class="band-grid">
+    <div>
+      <div class="kicker">Gameweek</div>
+      <div class="fig fig--hero" id="gw-number">00</div>
+    </div>
+    <div>
+      <div class="kicker">Deadline</div>
+      <div class="word" id="gw-deadline">...</div>
+    </div>
+    <div>
+      <div class="kicker">Time left</div>
+      <div class="fig" id="gw-countdown">...</div>
+    </div>
+    <div>
+      <div class="kicker">Free transfers</div>
+      <div class="fig" id="band-ft">..</div>
+    </div>
+    <div>
+      <div class="kicker">In the bank</div>
+      <div class="fig" id="band-bank">..</div>
+    </div>
+  </div>
+</div>
 
-  <section class="panel">
-    <h2>Your team</h2>
-    <p class="hint">
-      Your team id is the number in the URL when you view your own team on the
-      FPL site, <code>/entry/<b>1234567</b>/event/…</code>. Nothing is stored.
-    </p>
-    <form class="form" id="form">
-      <label class="field">
-        <span>FPL team id</span>
-        <input id="team" name="team" inputmode="numeric" pattern="[0-9]*"
-               placeholder="1234567" required>
-      </label>
-      <label class="field field--narrow">
-        <span>Free transfers</span>
-        <select id="free">
-          <option value="">from history</option>
-          <option>1</option><option>2</option><option>3</option>
-          <option>4</option><option>5</option>
-        </select>
-      </label>
-      <label class="field field--narrow">
-        <span>Plan over</span>
-        <select id="horizon">
-          <option value="1">1 GW</option>
-          <option value="4" selected>4 GWs</option>
-          <option value="6">6 GWs</option>
-          <option value="8">8 GWs</option>
-        </select>
-      </label>
-      <label class="field field--narrow">
-        <span>Max transfers</span>
-        <select id="maxt">
-          <option>1</option><option>2</option><option selected>3</option>
-          <option>4</option><option>5</option>
-        </select>
-      </label>
-      <button class="go" id="go" type="submit">Get advice</button>
-    </form>
+<main class="pad">
+
+  <section>
+    <div class="split">
+      <div>
+        <h6>Your team</h6>
+        <p class="muted" style="margin:8px 0 0; font-size:13px; max-width:40ch">
+          Your team id is the number in your own team URL on the FPL site.
+          Nothing is stored.
+        </p>
+      </div>
+      <form class="controls" id="form">
+        <label class="field">
+          <span>FPL team id</span>
+          <input class="input" id="team" inputmode="numeric" pattern="[0-9]*"
+                 placeholder="1234567" required>
+        </label>
+        <label class="field">
+          <span>Free transfers</span>
+          <select class="input input--sm" id="free">
+            <option value="">Auto</option>
+            <option>1</option><option>2</option><option>3</option>
+            <option>4</option><option>5</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Plan over</span>
+          <select class="input input--sm" id="horizon">
+            <option value="1">1 GW</option>
+            <option value="4" selected>4 GWs</option>
+            <option value="6">6 GWs</option>
+            <option value="8">8 GWs</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Max transfers</span>
+          <select class="input input--sm" id="maxt">
+            <option>1</option><option>2</option><option selected>3</option>
+            <option>4</option><option>5</option>
+          </select>
+        </label>
+        <button class="btn btn-primary" id="go" type="submit">Get advice</button>
+      </form>
+    </div>
+    <div id="state"></div>
   </section>
 
-  <div id="state"></div>
-
   <div id="results" hidden>
-    <div class="grid grid--split">
-      <section class="panel" id="transfers-panel">
-        <h2>Transfers</h2>
-        <p class="hint" id="transfers-hint"></p>
-        <div id="moves"></div>
-        <div class="verdict" id="transfer-verdict"></div>
-      </section>
 
-      <section class="panel">
-        <h2>Every option</h2>
-        <p class="hint">
-          Gross points gained over the horizon, less
-          <span id="hit-cost">4</span> points for each transfer beyond your free
-          ones. The best net figure is the recommendation.
-        </p>
-        <div class="scroll">
-          <table id="options">
-            <thead><tr>
-              <th>Transfers</th><th class="n">Gross</th>
-              <th class="n">Hit</th><th class="n">Net</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
+    <section>
+      <div class="cols cols--2">
+        <div>
+          <h2>Transfers</h2>
+          <p class="muted" id="transfers-hint" style="font-size:12px; margin:6px 0 16px"></p>
+          <div id="moves"></div>
+          <div class="totals" id="totals"></div>
         </div>
-      </section>
-    </div>
+        <div>
+          <h2>Every option</h2>
+          <p class="muted" style="font-size:12px; margin:6px 0 16px; max-width:46ch">
+            Gross points gained over the horizon, less
+            <span id="hit-cost">4</span> points for each transfer beyond your
+            free ones. The best net figure is the recommendation.
+          </p>
+          <div class="scroll">
+            <table id="options">
+              <thead><tr>
+                <th>Transfers</th><th class="n">Gross</th>
+                <th class="n">Hit</th><th class="n">Net</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted" id="options-note" style="font-size:12px; margin:14px 0 0"></p>
+        </div>
+      </div>
+    </section>
 
-    <section class="panel">
-      <h2>Starting eleven <span id="formation" class="tag"></span></h2>
-      <p class="hint" id="eleven-hint"></p>
-      <div class="scroll">
+    <section>
+      <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-bottom:20px">
+        <div>
+          <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap">
+            <h2>Starting eleven</h2>
+            <span class="fdr fdr-3" id="formation" style="font-size:12px; padding:3px 8px"></span>
+          </div>
+          <p class="muted" id="eleven-hint" style="font-size:12px; margin:6px 0 0; max-width:62ch"></p>
+        </div>
+        <div class="seg" role="group" aria-label="Eleven view">
+          <button type="button" id="view-pitch" aria-pressed="true">Pitch</button>
+          <button type="button" id="view-table" aria-pressed="false">Table</button>
+          <button type="button" id="view-compare" aria-pressed="false">Compare</button>
+        </div>
+      </div>
+
+      <div id="pitch-view">
+        <div class="cols" style="grid-template-columns:minmax(0,1fr)">
+          <div class="pitch" id="pitch"></div>
+          <div class="legend" id="legend-wrap">
+            <h6>Reading the strip</h6>
+            <div id="legend" style="display:block"></div>
+            <p class="muted" style="font-size:12px; margin:16px 0 0" id="legend-note"></p>
+          </div>
+        </div>
+      </div>
+
+      <div id="compare-view" hidden>
+        <div class="compare" id="compare"></div>
+      </div>
+
+      <div id="table-view" hidden class="scroll">
         <table id="eleven">
           <thead><tr>
             <th>Player</th><th>Pos</th><th>Club</th>
-            <th class="n">Price</th><th class="n">xP</th>
+            <th class="n">Price</th><th class="n" id="xp-head">xP</th>
             <th class="n">xP horizon</th><th>Fixtures</th>
           </tr></thead>
           <tbody></tbody>
@@ -107,34 +164,31 @@
       </div>
     </section>
 
-    <section class="panel" id="coach-panel" hidden>
-      <h2>Written briefing</h2>
-      <p class="hint" id="coach-hint">
-        A plain-English summary of the figures above, written by Gemini from
-        this data alone. It is given the numbers and forbidden from adding
-        anything to them.
-      </p>
-      <button class="go" id="coach-go" type="button">Write the briefing</button>
-      <div id="coach-out"></div>
-    </section>
-
-    <section class="panel">
-      <h2>Wildcard</h2>
-      <div class="verdict" id="wildcard-verdict"></div>
-      <div id="wildcard-squad"></div>
+    <section>
+      <div class="cols cols--2">
+        <div>
+          <h2>Wildcard</h2>
+          <div class="verdict" id="wildcard" style="margin-top:12px"></div>
+        </div>
+        <div>
+          <h2>Written briefing</h2>
+          <p class="muted" id="coach-hint" style="font-size:12px; margin:6px 0 14px; max-width:46ch">
+            A plain-English summary of the figures above. It is given the
+            numbers and forbidden from adding anything to them.
+          </p>
+          <button class="btn btn-secondary" id="coach-go" type="button">Write the briefing</button>
+          <div id="coach-out"></div>
+        </div>
+      </div>
     </section>
   </div>
 
   <footer class="foot">
-    <p>
-      Projections are this tool's own estimate, blended with FPL's published
+    <p>Projections are this tool's own estimate, blended with FPL's published
       <code>ep_next</code> for the immediate gameweek. They are estimates, not
-      forecasts of what will happen.
-    </p>
-    <p>
-      Data from the public Fantasy Premier League API. Not affiliated with or
-      endorsed by the Premier League.
-    </p>
+      forecasts.</p>
+    <p>Data from the public Fantasy Premier League API. Not affiliated with or
+      endorsed by the Premier League.</p>
   </footer>
 </main>
 

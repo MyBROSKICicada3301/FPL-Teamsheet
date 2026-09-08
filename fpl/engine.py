@@ -200,6 +200,15 @@ def advise(sq: squad_mod.Squad, ctx: Context, max_transfers: int = 3,
     xp_now = {pid: ctx.projections[pid].per_gw.get(ctx.next_gw, 0.0) for pid in after}
     eleven = squad_mod.best_eleven(after, xp_now, ctx.next_gw, ctx.players)
 
+    # The squad as it stands, scored the same way. Reporting only the improved
+    # version asks the reader to take the improvement on trust; showing both
+    # lets them see what they are giving up as well as what they gain, and
+    # judge whether the difference is worth the moves.
+    xp_before = {pid: ctx.projections[pid].per_gw.get(ctx.next_gw, 0.0)
+                 for pid in sq.player_ids}
+    before = squad_mod.best_eleven(list(sq.player_ids), xp_before,
+                                   ctx.next_gw, ctx.players)
+
     return {
         "generated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
         .isoformat().replace("+00:00", "Z"),
@@ -216,6 +225,7 @@ def advise(sq: squad_mod.Squad, ctx: Context, max_transfers: int = 3,
         "squad": [_player_row(pid, ctx) for pid in sq.player_ids],
         "plans": [p.as_dict(ctx.players) for p in plans],
         "recommended": chosen.as_dict(ctx.players),
+        "eleven_current": _eleven_dict(before, ctx, sq.player_ids),
         "eleven": {
             "formation": eleven.formation,
             "expected_points": eleven.expected_points,
@@ -237,6 +247,18 @@ def advise(sq: squad_mod.Squad, ctx: Context, max_transfers: int = 3,
             "transfers_needed": wc.transfers_needed,
             "squad": [_player_row(pid, ctx) for pid in wc.squad],
         },
+    }
+
+
+def _eleven_dict(eleven, ctx: Context, squad_ids: list[int]) -> dict:
+    """One chosen eleven as plain data, for the before-and-after comparison."""
+    return {
+        "formation": eleven.formation,
+        "expected_points": eleven.expected_points,
+        "starters": [_player_row(pid, ctx) for pid in eleven.starters],
+        "bench": [_player_row(pid, ctx) for pid in eleven.bench],
+        "captain": _player_row(eleven.captain, ctx),
+        "vice_captain": _player_row(eleven.vice_captain, ctx),
     }
 
 

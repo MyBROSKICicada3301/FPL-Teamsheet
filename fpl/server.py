@@ -359,7 +359,8 @@ class Handler(BaseHTTPRequestHandler):
 
         types = {".html": "text/html; charset=utf-8", ".css": "text/css",
                  ".js": "text/javascript", ".json": "application/json",
-                 ".svg": "image/svg+xml", ".ico": "image/x-icon"}
+                 ".svg": "image/svg+xml", ".ico": "image/x-icon",
+                 ".woff2": "font/woff2"}
         body = target.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", types.get(target.suffix, "application/octet-stream"))
