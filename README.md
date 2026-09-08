@@ -19,19 +19,19 @@ Python 3 and a browser are the whole toolchain.
 
 ## What has been done
 
-**The whole page**, all five sections of DESIGN.md §3, in `web/`:
+**The whole page**, all five sections of DESIGN.md 3, in `web/`:
 
-- **§1 Hero** — headline and probability driven by whoever tops the board, with
+- **1 Hero** — headline and probability driven by whoever tops the board, with
   the orchestrated load sequence (cutout fade, 120 ms headline stagger, 900 ms
   count-up).
-- **§2 Board** — horizontally scrolling snap cards, arrow-key navigation,
+- **2 Board** — horizontally scrolling snap cards, arrow-key navigation,
   4 px hover lift.
-- **§3 Explanation** — half-bleed portrait, factor bars in plain language,
+- **3 Explanation** — half-bleed portrait, factor bars in plain language,
   ordered by contribution, no numbers printed on the bars. Clicking any board
   card swaps this section to that player.
-- **§4 Club view** — dropdown with a 180 ms cross-fade, left-aligned rows with
+- **4 Club view** — dropdown with a 180 ms cross-fade, left-aligned rows with
   a probability meter and a tabular value at the right edge.
-- **§5 Method** — calibration curve, precision@20 against the naive baseline,
+- **5 Method** — calibration curve, precision@20 against the naive baseline,
   and the misses, at a 68-character measure.
 - Footer, disclaimer, error state, empty state, initials fallback for missing
   photography, and the full type and colour system as tokens.
@@ -41,9 +41,9 @@ behaviour, written from scratch. See the judgement calls below.
 
 **The data layer** in `backend/`:
 
-- `sql/schema.postgres.sql` — the BACKEND.md §3 schema, plus the
+- `sql/schema.postgres.sql` — the BACKEND.md 3 schema, plus the
   `squad_membership`, `club_finance`, `player_window_features` and `model_run`
-  tables §4–§6 need but §3 does not define.
+  tables 4–6 need but 3 does not define.
 - `sql/schema.sqlite.sql` — a SQLite translation so local dev needs no server.
 - `db.py`, `config.py`, `bands.py` — one interface over both databases, and the
   band thresholds in a single place.
@@ -64,9 +64,9 @@ In BACKEND.md's own build order. Each depends on the one above it.
 
 | # | Piece | Notes |
 |---|---|---|
-| 1 | **Feature builder** (§5) | One row per player-window, every feature computed as of `opens_on`, nothing read with `observed_on > opens_on`. The schema already carries the dates that make this enforceable and `seed.py` writes them correctly, so this is a query, not a data-model change. |
-| 2 | **Model and evaluation** (§6) | LightGBM, temporal split, isotonic calibration, precision@20 and Brier against the contract-length baseline. Needs `pip`, which this machine does not currently have. |
-| 3 | **FastAPI service** (§7) | The five endpoints, Redis cache, the two contract additions listed below. |
+| 1 | **Feature builder** (5) | One row per player-window, every feature computed as of `opens_on`, nothing read with `observed_on > opens_on`. The schema already carries the dates that make this enforceable and `seed.py` writes them correctly, so this is a query, not a data-model change. |
+| 2 | **Model and evaluation** (6) | LightGBM, temporal split, isotonic calibration, precision@20 and Brier against the contract-length baseline. Needs `pip`, which this machine does not currently have. |
+| 3 | **FastAPI service** (7) | The five endpoints, Redis cache, the two contract additions listed below. |
 | 4 | **Point the page at it** | One attribute: `<html data-api="/api/v1">`. No other frontend change. |
 | 5 | **Real data** | Every source is licensed or restricted — see "Why the data is placeholder" below. This is a procurement decision, not a coding one. |
 
@@ -84,32 +84,51 @@ Smaller outstanding items:
 
 ## How to start and stop it
 
-```bash
-./start.sh
-```
+### Start
+
+The page must be **served** — it fetches JSON, and browsers block that on
+`file://`, so opening `index.html` directly gives a blank page.
 
 ```bash
-./stop.sh
+cd "/media/mybrosky/New Volume/PremierLeague/web" && python3 -m http.server 8765
 ```
 
-`start.sh` prints the URL — <http://127.0.0.1:8765> — and hands your prompt
-back; the server keeps running behind you. Run it again when it is already up
-and it just prints the URL, so it doubles as the "is it running?" check.
+Then open <http://127.0.0.1:8765>.
 
-Details, for when something is off:
+Leave that command running while you use the site; it *is* the server. It
+prints a line per request, which is a useful sign the page is loading its
+fixtures.
 
-- The page has to be **served**. It fetches JSON, and browsers block that on
-  `file://`, so opening `index.html` directly gives a blank page.
-- It is `python3 -m http.server` on port 8765, serving `web/`. If that port is
-  taken, pass another: `PORT=9000 ./start.sh`.
-- Requests are logged to `server.log`, which is a useful sign the page is
-  loading its fixtures. The process id is in `.server.pid`. Both are ignored
-  by git.
-- If `.server.pid` is ever lost, find and kill the process by hand:
-  `pgrep -af "http.server 8765"`, then `kill <pid>`. By PID rather than
-  `pkill -f`, because `-f` matches whole command lines and will also hit any
-  other shell that happens to have that string in its arguments — including
-  the terminal you typed it in.
+### Stop
+
+Press `Ctrl+C` in the terminal running it.
+
+If it is running in the background from an earlier session and you no longer
+have that terminal, find it and kill it by PID:
+
+```bash
+pgrep -af "python3 -m http.server 8765"
+```
+
+That prints `<pid> python3 -m http.server 8765`. Then:
+
+```bash
+kill <pid>
+```
+
+Two steps rather than one `pkill -f`, because `-f` matches against whole
+command lines and will also hit any *other* shell that happens to have that
+string in its arguments — including the terminal you typed it in.
+
+### Check whether it is already running
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8765/
+```
+
+`200` means it is up; anything else, or a connection error, means start it.
+If port 8765 is taken by something else, any port works — pass a different
+number to both the server command and the URL.
 
 ### Regenerate the dummy database
 
@@ -117,14 +136,14 @@ Not needed to view the site. This rebuilds `backend/transferroom.db` from
 scratch, and is deterministic — the same seed gives the same dataset:
 
 ```bash
-cd backend && python3 -m transferroom.seed
+cd "/media/mybrosky/New Volume/PremierLeague/backend" && python3 -m transferroom.seed
 ```
 
 ## How the frontend gets its data
 
 `web/api.js` reads a base path off the root element. Unset, it serves the
 fixtures in `web/fixtures/`, which are shaped exactly like the responses in
-BACKEND.md §7. When the service exists, this becomes a one-line change:
+BACKEND.md 7. When the service exists, this becomes a one-line change:
 
 ```html
 <html lang="en-GB" data-api="/api/v1">
@@ -134,13 +153,13 @@ No other frontend change is needed.
 
 ### Two additions to the documented API contract
 
-DESIGN.md asks for things BACKEND.md §7 does not return. Both are in the
+DESIGN.md asks for things BACKEND.md 7 does not return. Both are in the
 fixtures and will need to exist on the real endpoints:
 
-1. **`/board` players need `destination` and `updated_at`.** §2 puts
+1. **`/board` players need `destination` and `updated_at`.** 2 puts
    "current club → predicted destination" and a last-updated caption on every
    card, and the documented payload carries neither.
-2. **`GET /clubs` needs to exist.** §4's dropdown has to populate from
+2. **`GET /clubs` needs to exist.** 4's dropdown has to populate from
    something; the documented endpoints only cover a single club's movements.
 
 ## Design decisions that needed a judgement call
@@ -182,13 +201,13 @@ through the crossing instead of borrowing another band's hue.
 The design canvas colours them with the ramp. At `--t-body` (17px) they are
 body text and need 4.5:1; measured against `--paper`, `--p-cold` is 3.26:1 and
 `--p-warm` is 3.63:1, so cold and warm values failed the quality floor.
-DESIGN.md §4 describes the row as "a probability bar running the width of the
+DESIGN.md 4 describes the row as "a probability bar running the width of the
 row with the value at the right edge" and does not colour the value, so the bar
 carries the encoding and the numeral stays readable.
 
 ## Why the data is placeholder
 
-DESIGN.md §4 and BACKEND.md §10 both land in the same place: press photography
+DESIGN.md 4 and BACKEND.md 10 both land in the same place: press photography
 is agency-owned, Transfermarkt's terms rule out commercial reuse, and FBref's
 rule out public hosting. So nothing here fabricates claims about a real person.
 
@@ -199,12 +218,12 @@ rule out public hosting. So nothing here fabricates claims about a real person.
 - **The dataset's shape is real** — observation dates, leak rules, class
   balance — so the pipeline that runs on it is the pipeline that would run on a
   licensed feed.
-- **No images.** Every portrait renders the initials fallback DESIGN.md §4
+- **No images.** Every portrait renders the initials fallback DESIGN.md 4
   specifies for missing players. When a licensed feed supplies `image.cutout`
   and `image.square`, `portrait()` in `app.js` uses them and falls back on
   error.
 
-## Verified against the quality floor (§6)
+## Verified against the quality floor (6)
 
 Checked in-browser, not by eye:
 
@@ -225,7 +244,6 @@ Checked in-browser, not by eye:
 ## Layout
 
 ```
-start.sh / stop.sh    run the site locally
 web/                  the site — open this
   index.html          structure, all five sections
   app.css             tokens, type scale, section rhythm
@@ -238,5 +256,4 @@ backend/
   transferroom/       db, config, bands, seed  (features/model/api absent)
 docs/                 DESIGN.md and BACKEND.md as supplied
 design/               the design canvas used as visual reference
-.claude/launch.json   lets Claude Code's preview pane start the same server
 ```
