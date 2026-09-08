@@ -14,3 +14,9 @@ server.log
 
 # FPL API responses, cached by fpl/data.py. Rebuilt on demand.
 .cache/
+
+# Secrets and personal settings. Never committed. Copy .env.example to .env
+# and fill it in; .env.example is the version that belongs in the repository.
+.env
+.env.*
+!.env.example

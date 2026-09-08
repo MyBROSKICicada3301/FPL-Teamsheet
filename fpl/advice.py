@@ -185,13 +185,32 @@ def find_transfers(squad: Squad, projections: dict, players: dict, rules: Rules,
     return plans
 
 
-def best_plan(plans: list[Plan]) -> Plan:
-    """The plan with the most net points. Ties break towards fewer transfers.
+#: A plan that takes a points hit must beat the best hit-free plan by at least
+#: this much before it is recommended.
+HIT_MARGIN = 2.0
 
-    Doing nothing is always in the list, so a squad with no worthwhile move
-    gets told to hold rather than being pushed into one.
+
+def best_plan(plans: list[Plan], margin: float = HIT_MARGIN) -> Plan:
+    """The plan with the most net points, with a thumb on the scale against hits.
+
+    Taking a hit is a *certain* loss of four points bought with an *estimated*
+    gain, and the estimate is nowhere near precise enough to justify the trade
+    on a hair. Left to bare arithmetic this recommended a hit that won by 0.08
+    points — a margin far inside the model's own error, and a recommendation no
+    one should act on.
+
+    So a plan carrying a hit has to clear the best hit-free plan by a real
+    margin. Doing nothing is always in the list, so a squad with no worthwhile
+    move is told to hold rather than pushed into one.
     """
-    return max(plans, key=lambda p: (round(p.net_gain, 3), -p.transfers))
+    free = [p for p in plans if p.hit == 0]
+    best_free = max(free, key=lambda p: (round(p.net_gain, 3), -p.transfers))
+
+    paid = [p for p in plans if p.hit > 0
+            and p.net_gain >= best_free.net_gain + margin]
+    if not paid:
+        return best_free
+    return max(paid, key=lambda p: (round(p.net_gain, 3), -p.transfers))
 
 
 # ------------------------------------------------------------------ wildcard
@@ -392,5 +411,5 @@ def wildcard_available(bootstrap: dict, hist: dict, next_gw: int) -> tuple[bool,
                        f"which is inside this window "
                        f"({window['start_event']}-{window['stop_event']}).")
 
-    return True, (f"Available — window covers gameweeks "
+    return True, (f"Available, window covers gameweeks "
                   f"{window['start_event']}-{window['stop_event']}.")

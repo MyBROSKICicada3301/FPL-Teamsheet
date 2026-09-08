@@ -24,12 +24,48 @@ answers "is it running?".
 Or skip the browser:
 
 ```bash
-python3 -m fpl.cli --team 1234567
+python3 -m fpl.cli
 ```
+
+With `FPL_TEAM_ID` set in `.env` that is the whole command; otherwise pass
+`--team 1234567`. Add `--coach` for the written briefing.
 
 Your team id is the number in the URL when you view your own team on the FPL
 site: `/entry/`**`1234567`**`/event/…`. It is a public id — the same one that
 appears in league tables — and nothing about your team is stored here.
+
+## Settings
+
+Secrets and personal values live in `.env`, which is gitignored. `.env.example`
+is the committed template:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | What it does |
+|---|---|
+| `GEMINI_API_KEY` | Google AI Studio key for the written briefing. Without it everything else works and the briefing panel hides itself. |
+| `GEMINI_MODEL` | Which model writes the briefing. Defaults to `gemini-flash-latest`. |
+| `FPL_TEAM_ID` | Your team id. Makes `python3 -m fpl.cli` work with no arguments and prefills the web form. Public, not a credential. |
+| `FPL_CACHE` | Where cached API responses go. Defaults to `.cache/fpl`. |
+| `PORT` | Port for `./start.sh` and the server. Defaults to 8765. |
+
+**Anything already exported in your shell wins over the file**, so a one-off
+override still works:
+
+```bash
+GEMINI_MODEL=gemini-3.6-flash ./start.sh
+```
+
+`fpl/env.py` loads the file at package import, before any module reads its
+configuration into a constant. `start.sh` reads it too, with the same
+precedence, so the server process inherits the key.
+
+Two things worth knowing. The key sits in plain text on disk, which is the
+normal trade for not typing it every time, but it means the file is worth no
+less care than the key itself. And this checkout is on a filesystem that does
+not carry Unix permissions, so `chmod 600` on `.env` does not stick here.
 
 ## What it actually decides
 
@@ -129,7 +165,8 @@ The page is a client of a small local service; the same endpoints are yours.
 | Route | Returns |
 |---|---|
 | `GET /api/healthz` | up, current gameweek, whether upstream is reachable |
-| `GET /api/gameweek` | next gameweek, deadline, horizon, the rule constants |
+| `GET /api/gameweek` | next gameweek, deadline, horizon, the rule constants, whether the briefing is configured |
+| `GET /api/coach?team=&horizon=` | the written briefing, generated on demand |
 | `GET /api/players?search=&limit=` | name search, best projected first |
 | `GET /api/advice?team=&horizon=&max_transfers=&free_transfers=` | the whole report |
 | `POST /api/advice` | the same, from `{"players": [...15...], "bank": 0, "free_transfers": 1}` |
@@ -153,13 +190,17 @@ rest — so the contract is documented rather than discovered.
 
 ```
 start.sh / stop.sh   run it
+.env                 secrets and personal settings (gitignored)
+.env.example         the committed template
 fpl/
+  env.py             loads .env, shell environment takes precedence
   rules.py           the game's rules, mostly read from the live config
   data.py            FPL API client, disk cache, typed failures
   projection.py      expected points per player per gameweek
   squad.py           legality, best eleven, captaincy
   advice.py          transfers, hit arithmetic, wildcard verdict
   engine.py          assembles one report
+  coach.py           the written briefing, grounded in the figures
   cli.py             terminal front end
   server.py          HTTP service + static files
 fplweb/              the page

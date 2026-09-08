@@ -140,7 +140,36 @@ def squad_from_team_id(team_id: int, ctx: Context) -> squad_mod.Squad:
     bank = picks.get("entry_history", {}).get("bank", 0)
     free = advice.free_transfers_from_history(hist, ctx.next_gw, ctx.rules)
 
-    return squad_mod.Squad(player_ids=ids, bank=bank, free_transfers=free)
+    captain = next((p["element"] for p in picks["picks"] if p.get("is_captain")), None)
+    vice = next((p["element"] for p in picks["picks"] if p.get("is_vice_captain")), None)
+
+    return squad_mod.Squad(player_ids=ids, bank=bank, free_transfers=free,
+                           captain=captain, vice_captain=vice)
+
+
+#: Chip names as the API spells them, and as a person does.
+CHIP_NAMES = {
+    "wildcard": "Wildcard",
+    "freehit": "Free Hit",
+    "bboost": "Bench Boost",
+    "3xc": "Triple Captain",
+    "manager": "Assistant Manager",
+}
+
+
+def chips_used(hist: dict | None) -> list[dict]:
+    """Chips already spent, so the report can say what is left.
+
+    Only the wildcard affects the advice, but a manager who has spent Triple
+    Captain wants to be told that rather than reminded of it in April.
+    """
+    if not hist:
+        return []
+    return [
+        {"name": CHIP_NAMES.get(c["name"], c["name"]), "raw": c["name"],
+         "gameweek": c["event"]}
+        for c in sorted(hist.get("chips", []), key=lambda c: c["event"])
+    ]
 
 
 def advise(sq: squad_mod.Squad, ctx: Context, max_transfers: int = 3,
@@ -180,6 +209,10 @@ def advise(sq: squad_mod.Squad, ctx: Context, max_transfers: int = 3,
         "horizon": ctx.horizon,
         "free_transfers": sq.free_transfers,
         "bank": sq.bank,
+        "chips_used": chips_used(hist),
+        "current_captain": _player_row(sq.captain, ctx) if sq.captain in ctx.players else None,
+        "current_vice_captain": (_player_row(sq.vice_captain, ctx)
+                                 if sq.vice_captain in ctx.players else None),
         "squad": [_player_row(pid, ctx) for pid in sq.player_ids],
         "plans": [p.as_dict(ctx.players) for p in plans],
         "recommended": chosen.as_dict(ctx.players),
@@ -190,6 +223,8 @@ def advise(sq: squad_mod.Squad, ctx: Context, max_transfers: int = 3,
             "bench": [_player_row(pid, ctx) for pid in eleven.bench],
             "captain": _player_row(eleven.captain, ctx),
             "vice_captain": _player_row(eleven.vice_captain, ctx),
+            "captain_changes": (sq.captain is not None
+                                and eleven.captain != sq.captain),
         },
         "wildcard": {
             "available": wc.available,
@@ -229,6 +264,11 @@ def _player_row(pid: int, ctx: Context) -> dict:
         "availability": round(p.availability, 2),
         "selected_by": p.selected_by,
         "form": p.form,
+        # How much evidence sits behind the rates. Without it a briefing cannot
+        # tell a settled starter from a player with one substitute appearance,
+        # and the first draft of this said so.
+        "minutes": p.minutes,
+        "starts": p.starts,
         "xp_next": round(proj.per_gw.get(ctx.next_gw, 0.0), 2),
         "xp_horizon": round(proj.over(ctx.horizon), 2),
         "fixtures": fixtures,

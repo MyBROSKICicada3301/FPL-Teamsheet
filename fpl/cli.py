@@ -6,9 +6,10 @@
 
 import argparse
 import json
+import os
 import sys
 
-from . import advice, data, engine, squad as squad_mod
+from . import advice, coach, data, engine, squad as squad_mod
 from .rules import money
 
 BAR = "─" * 74
@@ -42,6 +43,10 @@ def report(result: dict) -> None:
     print(f"  planning over gameweeks {result['horizon'][0]}-{result['horizon'][-1]}"
           f"  ·  {result['free_transfers']} free transfer(s)"
           f"  ·  bank {money(result['bank'])}")
+    used = result.get("chips_used") or []
+    if used:
+        print("  chips already played: "
+              + ", ".join(f"{c['name']} (GW{c['gameweek']})" for c in used))
     print(BAR)
 
     rec = result["recommended"]
@@ -67,6 +72,19 @@ def report(result: dict) -> None:
     e = result["eleven"]
     print(f"\nSTARTING ELEVEN  ({e['formation']}, {e['expected_points']:.1f} xP "
           f"including the captain)")
+
+    # Say what the armband is now as well as what it should be. Printing only
+    # the recommendation reads as a claim about the manager's team, which is
+    # how the first version of this got mistaken for a bug.
+    now = result.get("current_captain")
+    if now:
+        if e.get("captain_changes"):
+            print(f"  captain: {now['name']} now → change to {e['captain']['name']}")
+        else:
+            print(f"  captain: {now['name']}, keep it")
+    else:
+        print(f"  captain: {e['captain']['name']}")
+
     _table(e["starters"], gw, {e["captain"]["id"]: "C", e["vice_captain"]["id"]: "V"})
     print("\n  Bench, in substitution order:")
     _table(e["bench"], gw)
@@ -82,12 +100,35 @@ def report(result: dict) -> None:
         print(f"  on a wildcard      {w['wildcard_score']:.1f}"
               f"  ({w['transfers_needed']} players change)")
         if w["recommend"]:
-            print(f"\n  PLAY IT — worth {w['gain_over_plan']:+.1f} pts more than "
+            print(f"\n  PLAY IT: worth {w['gain_over_plan']:+.1f} pts more than "
                   "the best ordinary plan.")
             _table(w["squad"], gw)
         else:
-            print(f"\n  HOLD IT — only {w['gain_over_plan']:+.1f} pts better than "
+            print(f"\n  HOLD IT: only {w['gain_over_plan']:+.1f} pts better than "
                   "transfers you can make anyway.")
+    print()
+
+
+def briefing(written: dict) -> None:
+    """The written summary, wrapped to the same measure as the tables."""
+    import textwrap
+
+    print(BAR)
+    print(f"  BRIEFING  ({written['model']})")
+    print(BAR)
+    for para in written["text"].split("\n"):
+        if not para.strip():
+            print()
+            continue
+        print(textwrap.fill(para.strip(), width=74,
+                            initial_indent="  ", subsequent_indent="  "))
+    print()
+    print("  Sources")
+    for tag, description in written["sources"].items():
+        print(textwrap.fill(f"[{tag}] {description}", width=74,
+                            initial_indent="    ", subsequent_indent="      "))
+    if written["style_problems"]:
+        print(f"\n  style filter caught: {', '.join(written['style_problems'])}")
     print()
 
 
@@ -96,9 +137,12 @@ def main(argv=None) -> int:
         prog="python3 -m fpl.cli",
         description="Transfer, captain and wildcard advice for the next gameweek.",
     )
-    src = ap.add_mutually_exclusive_group(required=True)
+    # Not required: FPL_TEAM_ID in .env supplies the default, so the common
+    # case is bare `python3 -m fpl.cli`.
+    src = ap.add_mutually_exclusive_group()
     src.add_argument("--team", type=int, metavar="ID",
-                     help="your FPL team id (the number in the URL of your team page)")
+                     help="your FPL team id (the number in the URL of your team "
+                          "page). Defaults to FPL_TEAM_ID from .env")
     src.add_argument("--players", metavar="NAMES",
                      help="15 comma-separated player names, instead of a team id")
     ap.add_argument("--bank", type=float, default=0.0, metavar="M",
@@ -109,12 +153,22 @@ def main(argv=None) -> int:
                     metavar="N", help="gameweeks to plan over (default 4)")
     ap.add_argument("--max-transfers", type=int, default=3, metavar="N",
                     help="most transfers to consider in one plan (default 3)")
+    ap.add_argument("--coach", action="store_true",
+                    help="add a written briefing from Gemini, grounded in the "
+                         "figures above (needs GEMINI_API_KEY)")
     ap.add_argument("--json", action="store_true", help="print the raw report")
     ap.add_argument("--refresh", action="store_true", help="ignore the cache")
     args = ap.parse_args(argv)
 
     if args.refresh:
         data.clear_cache()
+
+    if args.team is None and not args.players:
+        from_env = os.environ.get("FPL_TEAM_ID", "").strip()
+        if not from_env.isdigit():
+            ap.error("no team id. Pass --team, or set FPL_TEAM_ID in .env "
+                     "(copy .env.example to start).")
+        args.team = int(from_env)
 
     try:
         ctx = engine.load(args.horizon)
@@ -140,10 +194,19 @@ def main(argv=None) -> int:
         print(f"error [{e.code}]: {e}", file=sys.stderr)
         return 3
 
+    if args.coach:
+        try:
+            result["coach"] = coach.advise(result)
+        except coach.CoachError as e:
+            print(f"error [{e.code}]: {e}", file=sys.stderr)
+            return 4
+
     if args.json:
         print(json.dumps(result, indent=2))
     else:
         report(result)
+        if "coach" in result:
+            briefing(result["coach"])
     return 0
 
 

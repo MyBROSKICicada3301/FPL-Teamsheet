@@ -26,6 +26,10 @@ class Squad:
     free_transfers: int = 1
     #: What each player would sell for, in tenths. Falls back to current price.
     selling: dict[int, int] = field(default_factory=dict)
+    #: The armband as it currently stands, so advice can be reported as a
+    #: change or a confirmation rather than as a bare instruction.
+    captain: int | None = None
+    vice_captain: int | None = None
 
     def sale_value(self, players: dict) -> int:
         return sum(self.selling.get(pid, players[pid].cost) for pid in self.player_ids)

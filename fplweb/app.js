@@ -9,6 +9,16 @@
  */
 
 const $ = (sel) => document.querySelector(sel);
+
+/* Whether the server has a Gemini key, and which model it would use. Read once
+   from /api/gameweek so the button can be hidden rather than offered and then
+   failing. */
+let COACH = { available: false };
+
+/* The parameters behind the report on screen, so the briefing asks about the
+   same team, horizon and transfer allowance rather than re-reading the form,
+   which the user may have edited since. */
+let LAST_QUERY = null;
 const money = (tenths) => `£${(tenths / 10).toFixed(1)}m`;
 const signed = (n) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}`;
 
@@ -49,6 +59,13 @@ async function loadGameweek() {
       .toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
     $('#hit-cost').textContent = gw.rules.hit;
     $('#gw-strip').hidden = false;
+    COACH = gw.coach || { available: false };
+
+    // Prefill order: what this browser last used, then the operator's own id
+    // from .env. A remembered value wins so a shared machine does not keep
+    // resetting to somebody else's team.
+    const field = $('#team');
+    if (!field.value && gw.default_team) field.value = gw.default_team;
     countdown(gw.deadline);
   } catch (err) {
     showError(err);
@@ -78,7 +95,7 @@ function clearState() { $('#state').innerHTML = ''; }
 /* ---------------------------------------------------------------- render */
 
 function fixtureCells(row) {
-  if (!row.fixtures.length) return '<span class="fdr fdr-3">—</span>';
+  if (!row.fixtures.length) return '<span class="fdr fdr-3">none</span>';
   return row.fixtures.map((f) =>
     `<span class="fdr fdr-${f.difficulty}" title="GW${f.gw} ${
       f.home ? 'home' : 'away'} v ${f.opponent}, difficulty ${f.difficulty}">${
@@ -101,10 +118,14 @@ function playerRow(row, tags = '') {
 
 function renderTransfers(d) {
   const rec = d.recommended;
+  const chips = (d.chips_used || [])
+    .map((c) => `${c.name} (GW${c.gameweek})`).join(', ');
+
   $('#transfers-hint').textContent =
     `${d.free_transfers} free transfer${d.free_transfers === 1 ? '' : 's'}`
     + ` · ${money(d.bank)} in the bank`
-    + ` · judged over gameweeks ${d.horizon[0]}–${d.horizon[d.horizon.length - 1]}`;
+    + ` · judged over gameweeks ${d.horizon[0]}–${d.horizon[d.horizon.length - 1]}`
+    + (chips ? ` · chips played: ${chips}` : '');
 
   $('#moves').innerHTML = rec.moves.length
     ? rec.moves.map((m) => `
@@ -140,8 +161,18 @@ function renderTransfers(d) {
 function renderEleven(d) {
   const e = d.eleven;
   $('#formation').textContent = e.formation;
-  $('#eleven-hint').textContent =
-    `${e.expected_points.toFixed(1)} expected points in GW${d.gameweek}, `
+
+  // Say what the armband is now as well as what it should be. Showing only the
+  // recommendation reads as a claim about the manager's own team.
+  const now = d.current_captain;
+  const armband = !now
+    ? `Captain ${escapeHtml(e.captain.name)}.`
+    : e.captain_changes
+      ? `Captain: <b>${escapeHtml(now.name)}</b> now — change to <b>${escapeHtml(e.captain.name)}</b>.`
+      : `Captain: <b>${escapeHtml(now.name)}</b> — keep it.`;
+
+  $('#eleven-hint').innerHTML =
+    `${armband} ${e.expected_points.toFixed(1)} expected points in GW${d.gameweek}, `
     + `captain doubled. Bench is in automatic-substitution order.`;
 
   const body = e.starters.map((p) => playerRow(
@@ -171,8 +202,8 @@ function renderWildcard(d) {
     <b>${w.recommend ? 'Play it.' : 'Hold it.'}</b>
     A wildcard squad is worth <b>${w.wildcard_score.toFixed(1)}</b> points over
     ${d.horizon.length} gameweeks, against <b>${w.plan_score.toFixed(1)}</b> for the
-    transfers above and <b>${w.current_score.toFixed(1)}</b> for standing still —
-    <b>${signed(w.gain_over_plan)}</b> points, for
+    transfers above and <b>${w.current_score.toFixed(1)}</b> for standing still,
+    a difference of <b>${signed(w.gain_over_plan)}</b> points, for
     ${w.transfers_needed} changes. ${w.reason ? escapeHtml(w.reason) : ''}`;
 
   if (w.recommend && w.squad.length) {
@@ -186,6 +217,61 @@ function renderWildcard(d) {
   }
 }
 
+/* ------------------------------------------------------------- briefing */
+
+/* Bracketed source tags are the point of the exercise, so they are marked up
+   rather than left as noise in the middle of a sentence. */
+function withCitations(paragraph) {
+  return escapeHtml(paragraph).replace(
+    /\[([a-z_,\s]+)\]/g,
+    (_, tags) => `<span class="cite">[${tags}]</span>`,
+  );
+}
+
+function renderCoach(written) {
+  const paragraphs = written.text.split('\n').filter((p) => p.trim());
+  const sources = Object.entries(written.sources || {})
+    .map(([tag, text]) => `<dt>[${escapeHtml(tag)}]</dt><dd>${escapeHtml(text)}</dd>`)
+    .join('');
+
+  $('#coach-out').innerHTML = `
+    <div class="coach">
+      ${paragraphs.map((p) => `<p>${withCitations(p.trim())}</p>`).join('')}
+      <div class="coach__sources">
+        <h3>Sources</h3>
+        <dl>${sources}</dl>
+      </div>
+      <p class="coach__meta">Written by ${escapeHtml(written.model)} from the
+        figures on this page. It is given the data and forbidden from adding to
+        it, so it cannot see team news, injuries or press conferences.</p>
+    </div>`;
+}
+
+$('#coach-go').addEventListener('click', async () => {
+  if (!LAST_QUERY) return;
+  const button = $('#coach-go');
+  button.disabled = true;
+  button.textContent = 'Writing, this takes up to a minute';
+  $('#coach-out').innerHTML = '';
+
+  try {
+    renderCoach(await api(`/api/coach?${LAST_QUERY}`));
+    button.hidden = true;
+  } catch (err) {
+    // A failure here must not blank the numbers, which are still valid, so it
+    // reports inside its own panel rather than through showError.
+    $('#coach-out').innerHTML = `
+      <div class="state state--error" style="margin-top:16px">
+        <h3>The briefing didn't generate</h3>
+        <p>${escapeHtml(err.message || 'Unknown error.')}</p>
+        <p><code>${escapeHtml(err.code || 'unknown')}</code></p>
+      </div>`;
+  } finally {
+    button.disabled = false;
+    if (!button.hidden) button.textContent = 'Try again';
+  }
+});
+
 /* -------------------------------------------------------------------- boot */
 
 function escapeHtml(s) {
@@ -198,7 +284,7 @@ $('#form').addEventListener('submit', async (event) => {
   const team = $('#team').value.trim();
   if (!/^\d+$/.test(team)) {
     return showError({ code: 'invalid_team_id',
-                       message: 'A team id is digits only — the number in your team URL.' });
+                       message: 'A team id is digits only, the number in your team URL.' });
   }
 
   const params = new URLSearchParams({
@@ -216,6 +302,17 @@ $('#form').addEventListener('submit', async (event) => {
     renderTransfers(data);
     renderEleven(data);
     renderWildcard(data);
+
+    LAST_QUERY = params.toString();
+    $('#coach-out').innerHTML = '';
+    $('#coach-go').hidden = false;
+    $('#coach-go').textContent = 'Write the briefing';
+    $('#coach-panel').hidden = !COACH.available;
+    if (!COACH.available) {
+      $('#coach-hint').textContent =
+        'Set GEMINI_API_KEY in the server environment to enable the briefing.';
+    }
+
     $('#results').hidden = false;
     localStorage.setItem('fpl-team', team);
   } catch (err) {

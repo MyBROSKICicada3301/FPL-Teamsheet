@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FPL Assistant — next gameweek</title>
+<title>FPL Assistant, next gameweek</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
@@ -11,11 +11,11 @@
 <header class="top">
   <div class="wrap">
     <h1>FPL Assistant</h1>
-    <p class="sub">Transfers, captain and wildcard for the gameweek ahead — from live FPL data.</p>
+    <p class="sub">Transfers, captain and wildcard for the gameweek ahead, from live FPL data.</p>
     <dl class="gw" id="gw-strip" hidden>
-      <div><dt>Gameweek</dt><dd id="gw-number">—</dd></div>
-      <div><dt>Deadline</dt><dd id="gw-deadline">—</dd></div>
-      <div><dt>Time left</dt><dd id="gw-countdown">—</dd></div>
+      <div><dt>Gameweek</dt><dd id="gw-number">..</dd></div>
+      <div><dt>Deadline</dt><dd id="gw-deadline">..</dd></div>
+      <div><dt>Time left</dt><dd id="gw-countdown">..</dd></div>
     </dl>
   </div>
 </header>
@@ -26,7 +26,7 @@
     <h2>Your team</h2>
     <p class="hint">
       Your team id is the number in the URL when you view your own team on the
-      FPL site — <code>/entry/<b>1234567</b>/event/…</code>. Nothing is stored.
+      FPL site, <code>/entry/<b>1234567</b>/event/…</code>. Nothing is stored.
     </p>
     <form class="form" id="form">
       <label class="field">
@@ -105,6 +105,17 @@
           <tbody></tbody>
         </table>
       </div>
+    </section>
+
+    <section class="panel" id="coach-panel" hidden>
+      <h2>Written briefing</h2>
+      <p class="hint" id="coach-hint">
+        A plain-English summary of the figures above, written by Gemini from
+        this data alone. It is given the numbers and forbidden from adding
+        anything to them.
+      </p>
+      <button class="go" id="coach-go" type="button">Write the briefing</button>
+      <div id="coach-out"></div>
     </section>
 
     <section class="panel">

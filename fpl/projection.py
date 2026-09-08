@@ -178,28 +178,74 @@ def player_from(raw: dict, teams: dict[int, dict]) -> Player:
     )
 
 
-def _positional_means(players: list[Player]) -> dict[int, dict[str, float]]:
-    """Average per-90 rates by position, over players with real minutes.
+RATES = ("xg90", "xa90", "xgc90", "saves90", "dc90", "bps90")
 
-    These are the prior that thin samples are shrunk towards. Restricting the
-    average to players who have actually played stops the hundreds of squad
-    fillers on zero minutes from dragging every prior to nothing.
+
+def _fit_line(xs: list[float], ys: list[float]) -> tuple[float, float]:
+    """Least-squares intercept and slope. Returns (mean, 0) if x never varies."""
+    n = len(xs)
+    mx = sum(xs) / n
+    my = sum(ys) / n
+    var = sum((x - mx) ** 2 for x in xs)
+    if var < 1e-9:
+        return my, 0.0
+    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / var
+    return my - slope * mx, slope
+
+
+class Priors:
+    """What we expect of a player before seeing this season's minutes.
+
+    The obvious prior is the positional average, and it is wrong in a way that
+    matters. Shrinking towards "an average forward" is right for a mid-table
+    striker with three noisy games; it is a systematic penalty on the players
+    people actually captain, because it pulls a genuine outlier towards a
+    number we already know is false about him. Early in a season, when every
+    rate is thin, that is exactly when the error is largest.
+
+    So the prior is conditioned on price. A player's cost is FPL's own encoding
+    of what it expects from him, set from last season before a ball was kicked
+    this one, and it is available for every player at no extra request. Within
+    each position the rate is regressed on cost, and a player is shrunk towards
+    the fitted value at *his* price rather than towards the middle of his
+    position. A £15.5m forward is compared against what £15.5m forwards do.
+
+    Fitted values are clamped to the range actually observed in the position,
+    because a straight line extrapolated to the most expensive player in the
+    game is not evidence.
     """
-    out = {}
-    for pos in (1, 2, 3, 4):
-        pool = [p for p in players if p.position == pos and p.minutes >= 180]
-        if not pool:
-            pool = [p for p in players if p.position == pos] or players
-        n = len(pool)
-        out[pos] = {
-            "xg90": sum(p.xg90 for p in pool) / n,
-            "xa90": sum(p.xa90 for p in pool) / n,
-            "xgc90": sum(p.xgc90 for p in pool) / n,
-            "saves90": sum(p.saves90 for p in pool) / n,
-            "dc90": sum(p.dc90 for p in pool) / n,
-            "bps90": sum(p.bps90 for p in pool) / n,
-        }
-    return out
+
+    def __init__(self, players: list[Player]):
+        self._fits: dict[int, dict[str, tuple[float, float]]] = {}
+        self._bounds: dict[int, dict[str, tuple[float, float]]] = {}
+        self._means: dict[int, dict[str, float]] = {}
+
+        for pos in (1, 2, 3, 4):
+            # Players with real minutes only: the hundreds of squad fillers on
+            # zero minutes would drag every fit towards nothing.
+            pool = [p for p in players if p.position == pos and p.minutes >= 180]
+            if len(pool) < 6:
+                pool = [p for p in players if p.position == pos] or players
+
+            costs = [float(p.cost) for p in pool]
+            self._fits[pos], self._bounds[pos], self._means[pos] = {}, {}, {}
+            for rate in RATES:
+                values = [getattr(p, rate) for p in pool]
+                self._fits[pos][rate] = _fit_line(costs, values)
+                self._bounds[pos][rate] = (min(values), max(values))
+                self._means[pos][rate] = sum(values) / len(values)
+
+    def for_player(self, p: Player) -> dict[str, float]:
+        out = {}
+        for rate in RATES:
+            intercept, slope = self._fits[p.position][rate]
+            low, high = self._bounds[p.position][rate]
+            out[rate] = max(low, min(high, intercept + slope * p.cost))
+        return out
+
+    def mean(self, position: int, rate: str) -> float:
+        """The plain positional average, still needed to judge a leaky defence."""
+        return self._means[position][rate]
 
 
 def _shrink(rate: float, prior: float, minutes: float) -> float:
@@ -250,7 +296,7 @@ def _expected_bonus(bps90: float, minutes: float) -> float:
     return (minutes / 90.0) * 1.8 * (per90 ** 2) / (per90 ** 2 + 26.0 ** 2)
 
 
-def project_one(p: Player, fixtures: list[Fixture], priors: dict) -> float:
+def project_one(p: Player, fixtures: list[Fixture], priors: "Priors") -> float:
     """Expected points for one player across the fixtures of one gameweek.
 
     A blank gameweek is an empty list and scores zero. A double is two entries
@@ -260,13 +306,19 @@ def project_one(p: Player, fixtures: list[Fixture], priors: dict) -> float:
     if not fixtures or p.availability <= 0:
         return 0.0
 
-    prior = priors[p.position]
+    prior = priors.for_player(p)
     xg90 = _shrink(p.xg90, prior["xg90"], p.minutes)
     xa90 = _shrink(p.xa90, prior["xa90"], p.minutes)
     xgc90 = _shrink(p.xgc90, prior["xgc90"], p.minutes)
     saves90 = _shrink(p.saves90, prior["saves90"], p.minutes)
     dc90 = _shrink(p.dc90, prior["dc90"], p.minutes)
     bps90 = _shrink(p.bps90, prior["bps90"], p.minutes)
+
+    # "Leaky" is measured against the position as a whole, not against what a
+    # side at this price should concede — the question is whether this defence
+    # keeps clean sheets, not whether it is good value.
+    league_xgc = priors.mean(p.position, "xgc90")
+    leak = xgc90 / max(0.3, league_xgc)
 
     p_any, p_60, minutes = _minutes_profile(p)
     total = 0.0
@@ -286,7 +338,6 @@ def project_one(p: Player, fixtures: list[Fixture], priors: dict) -> float:
             base = CLEAN_SHEET_BY_FDR[fdr] * (1.10 if fx.home else 0.90)
             # A side that concedes more than the league average keeps fewer
             # clean sheets than its fixture alone suggests.
-            leak = xgc90 / max(0.3, prior["xgc90"])
             p_cs = max(0.02, min(0.75, base * (2.0 - leak)))
             total += p_cs * CLEAN_SHEET_POINTS[p.position] * p_60
 
@@ -294,7 +345,7 @@ def project_one(p: Player, fixtures: list[Fixture], priors: dict) -> float:
             total += (saves90 * share) / 3.0
 
         if p.position in (1, 2):
-            conceded = CONCEDED_BY_FDR[fdr] * max(0.4, leak if CLEAN_SHEET_POINTS[p.position] else 1.0)
+            conceded = CONCEDED_BY_FDR[fdr] * max(0.4, leak)
             total -= 0.5 * conceded * p_60
 
         threshold = DEFENSIVE_CONTRIBUTION_THRESHOLD[p.position]
@@ -324,7 +375,7 @@ def build(bootstrap: dict, fixtures_raw: list, horizon: list[int]) -> dict[int, 
     """Project every player over each gameweek in `horizon`."""
     teams = {t["id"]: t for t in bootstrap["teams"]}
     players = [player_from(r, teams) for r in bootstrap["elements"]]
-    priors = _positional_means(players)
+    priors = Priors(players)
 
     # Fixtures indexed by (gameweek, team), so a double gameweek is simply a
     # list of length two and a blank is an absent key.

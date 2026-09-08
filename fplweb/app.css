@@ -137,3 +137,20 @@ tr.pick td { background: #F0F7F2; }
 
 .foot { color: var(--slate); font-size: var(--t-caption); padding-block: 28px 48px; }
 .foot p { margin: 0 0 6px; max-width: 68ch; }
+
+/* ------------------------------------------------------------- briefing */
+
+/* Set at reading width and a step up in size: it is prose, and the rest of
+   the page is tables. The source list is deliberately plain, because it is
+   there to be checked rather than admired. */
+.coach { margin-top: 18px; max-width: 68ch; }
+.coach p { margin: 0 0 14px; font-size: var(--t-body); line-height: 1.62; }
+.coach .cite { color: var(--slate); font-size: var(--t-caption); }
+.coach__sources { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--hairline); }
+.coach__sources h3 { margin: 0 0 8px; font-size: var(--t-caption); color: var(--slate);
+                     font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+.coach__sources dl { margin: 0; display: grid; gap: 6px; font-size: var(--t-caption); }
+.coach__sources dt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                     color: var(--ink); }
+.coach__sources dd { margin: 0 0 4px; color: var(--slate); }
+.coach__meta { margin-top: 14px; color: var(--slate); font-size: var(--t-caption); }

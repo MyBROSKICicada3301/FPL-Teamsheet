@@ -16,6 +16,7 @@ ones raised in `engine.InputError` and `data.FPLError`, and they are listed in
 """
 
 import json
+import os
 import re
 import threading
 import traceback
@@ -23,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import advice, data, engine, squad as squad_mod
+from . import advice, coach, data, engine, squad as squad_mod
 from .rules import Rules
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "fplweb"
@@ -49,29 +50,54 @@ ERROR_CODES = {
     "payload_too_large":    (413, "The request body is too large."),
     "upstream_error":       (502, "Fantasy Premier League returned an error."),
     "upstream_unreachable": (504, "Could not reach Fantasy Premier League."),
+    "coach_no_key":         (503, "No GEMINI_API_KEY in the server environment."),
+    "coach_upstream_error": (502, "Gemini returned an error."),
+    "coach_unreachable":    (504, "Could not reach Gemini."),
+    "coach_empty":          (502, "Gemini returned no usable text."),
     "internal_error":       (500, "Something broke on this side."),
 }
 
 MAX_BODY = 64 * 1024
 
-#: A loaded Context is a megabyte of projections and takes a second to build,
-#: so it is held and reused. The lock stops two requests rebuilding at once.
-_ctx_lock = threading.Lock()
+#: A loaded Context is a megabyte of projections and takes the best part of a
+#: minute to build on a cold cache, so it is held and reused.
 _ctx_cache: dict[int, engine.Context] = {}
+
+#: One lock per horizon, plus a lock guarding the lock table itself. A single
+#: global lock meant a request building the 6-gameweek context blocked every
+#: other request — including the health check, which then timed out and made a
+#: perfectly healthy server look dead. Locks are per-horizon so two different
+#: builds proceed independently, and no lock is ever held by a reader.
+_locks_guard = threading.Lock()
+_locks: dict[int, threading.Lock] = {}
+
+
+def _lock_for(horizon: int) -> threading.Lock:
+    with _locks_guard:
+        return _locks.setdefault(horizon, threading.Lock())
+
+
+def peek(horizon: int) -> engine.Context | None:
+    """The context if it is already built, without building or waiting."""
+    return _ctx_cache.get(horizon)
 
 
 def context(horizon: int) -> engine.Context:
-    with _ctx_lock:
-        ctx = _ctx_cache.get(horizon)
-        if ctx is None:
-            ctx = engine.load(horizon)
-            _ctx_cache[horizon] = ctx
-        return ctx
+    ready = _ctx_cache.get(horizon)
+    if ready is not None:
+        return ready
+
+    with _lock_for(horizon):
+        # Another thread may have finished while this one waited.
+        ready = _ctx_cache.get(horizon)
+        if ready is None:
+            ready = engine.load(horizon)
+            _ctx_cache[horizon] = ready
+        return ready
 
 
 def invalidate() -> None:
-    with _ctx_lock:
-        _ctx_cache.clear()
+    _ctx_cache.clear()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -119,6 +145,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._players(query)
             if route == "/api/advice":
                 return self._advice_get(query)
+            if route == "/api/coach":
+                return self._coach_get(query)
             if route.startswith("/api"):
                 return self._fail("not_found", f"No route {url.path}.")
             return self._static(url.path)
@@ -159,12 +187,21 @@ class Handler(BaseHTTPRequestHandler):
     # --------------------------------------------------------------- handlers
 
     def _healthz(self):
-        """Up, and whether the upstream data is fresh enough to trust."""
-        try:
-            ctx = context(advice.DEFAULT_HORIZON)
-        except data.FPLError as e:
-            return self._send(503, {"status": "degraded", "reason": str(e),
-                                    "code": e.code})
+        """Is the process up and serving.
+
+        Deliberately does no work: it reports the context only if one is
+        already built. A health check that waits on a projection build is not a
+        health check — it is the thing that made `start.sh` declare a running
+        server dead, because the probe queued behind a cold-cache load and was
+        eventually reset.
+
+        "starting" is a 200. The server is up and answering; it simply has not
+        finished loading, which is exactly what a startup probe needs to know.
+        """
+        ctx = peek(advice.DEFAULT_HORIZON)
+        if ctx is None:
+            return self._send(200, {"status": "starting",
+                                    "detail": "projections are still loading"})
         return self._send(200, {
             "status": "ok",
             "gameweek": ctx.next_gw,
@@ -185,6 +222,16 @@ class Handler(BaseHTTPRequestHandler):
                 "max_free_transfers": ctx.rules.max_free_transfers,
                 "hit": advice.POINTS_PER_EXTRA_TRANSFER,
             },
+            # So the page can hide the briefing button rather than offering
+            # something that is certain to fail.
+            "coach": {
+                "available": bool(os.environ.get("GEMINI_API_KEY", "").strip()),
+                "model": coach.MODEL,
+            },
+            # Convenience only, and only ever the operator's own id from .env.
+            # An FPL team id is public, the number in every league table, so
+            # this is saving a copy and paste rather than exposing anything.
+            "default_team": os.environ.get("FPL_TEAM_ID", "").strip() or None,
         }, cache=300)
 
     def _players(self, query):
@@ -225,6 +272,38 @@ class Handler(BaseHTTPRequestHandler):
 
         result = engine.advise(sq, ctx, self._max_transfers(query), hist, team_id)
         return self._send(200, result, cache=60)
+
+    def _coach_get(self, query):
+        """The written briefing, generated on demand rather than with the advice.
+
+        Kept as a separate request for two reasons. It costs an upstream call
+        against a quota that is small on a free key, so it should happen when
+        somebody asks for it and not on every page load. And it takes tens of
+        seconds, which is far too long to hold up the numbers the reader came
+        for.
+        """
+        raw = (query.get("team", [""])[0] or "").strip()
+        if not re.fullmatch(r"\d{1,12}", raw):
+            return self._fail(
+                "invalid_team_id",
+                "Pass ?team= with your FPL team id.",
+            )
+
+        ctx = context(self._horizon(query))
+        team_id = int(raw)
+        sq = engine.squad_from_team_id(team_id, ctx)
+        hist = data.history(team_id)
+
+        override = query.get("free_transfers", [None])[0]
+        if override is not None and override.isdigit():
+            sq.free_transfers = max(0, min(ctx.rules.max_free_transfers, int(override)))
+
+        report = engine.advise(sq, ctx, self._max_transfers(query), hist, team_id)
+        try:
+            written = coach.advise(report)
+        except coach.CoachError as e:
+            return self._fail(e.code, str(e), e.status)
+        return self._send(200, written)
 
     def _advice_post(self, body):
         ctx = context(self._horizon({}))
@@ -310,15 +389,67 @@ class Handler(BaseHTTPRequestHandler):
             return 3
 
 
+class Server(ThreadingHTTPServer):
+    """ThreadingHTTPServer with a deeper backlog and quieter disconnects."""
+
+    daemon_threads = True
+
+    #: socketserver defaults to 5. The preload below means several requests can
+    #: arrive before any is answered, and a queue of five overflows into resets
+    #: that look like server errors from the client side.
+    request_queue_size = 64
+
+    def handle_error(self, request, client_address):
+        """A client hanging up is normal, not an error worth a traceback.
+
+        Printing the full ConnectionResetError stack made an ordinary
+        disconnect look like a crash — it was the first thing `start.sh` showed
+        when something unrelated went wrong, and it sent the diagnosis in
+        entirely the wrong direction.
+        """
+        import sys
+
+        kind = sys.exc_info()[0]
+        if kind is not None and issubclass(
+            kind, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)
+        ):
+            return
+        super().handle_error(request, client_address)
+
+
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
-    httpd = ThreadingHTTPServer((host, port), Handler)
-    print(f"FPL Assistant on http://{host}:{port}")
-    print("  loading the game…", flush=True)
     try:
-        ctx = context(advice.DEFAULT_HORIZON)
-        print(f"  ready — gameweek {ctx.next_gw}, deadline {ctx.deadline}")
-    except data.FPLError as e:
-        print(f"  warning: could not preload ({e}); will retry per request")
+        httpd = Server((host, port), Handler)
+    except OSError as e:
+        if e.errno == 98:            # EADDRINUSE
+            raise SystemExit(
+                f"Port {port} is already in use by another process.\n"
+                f"  find it:  ss -ltnp | grep {port}\n"
+                f"  or serve elsewhere:  PORT=8766 ./start.sh"
+            ) from None
+        raise
+
+    print(f"FPL Assistant on http://{host}:{port}", flush=True)
+
+    def preload():
+        """Build the projections behind the server rather than in front of it.
+
+        This used to run before `serve_forever()`. The socket was already
+        bound, so clients could connect and then wait a full minute for a
+        thread that did not exist yet. Loading in the background means the
+        server answers from the first instant, and /api/healthz says
+        "starting" until this finishes.
+        """
+        try:
+            ctx = context(advice.DEFAULT_HORIZON)
+            print(f"  ready, gameweek {ctx.next_gw}, deadline {ctx.deadline}",
+                  flush=True)
+        except data.FPLError as e:
+            print(f"  warning: could not preload ({e}); will retry per request",
+                  flush=True)
+
+    threading.Thread(target=preload, name="preload", daemon=True).start()
+
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
