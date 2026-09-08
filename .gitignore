@@ -13,3 +13,7 @@ backend/transferroom.db
 # OS
 .DS_Store
 Thumbs.db
+
+# Written by ./start.sh
+.server.pid
+server.log

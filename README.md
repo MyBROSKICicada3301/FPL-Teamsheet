@@ -84,51 +84,32 @@ Smaller outstanding items:
 
 ## How to start and stop it
 
-### Start
-
-The page must be **served** — it fetches JSON, and browsers block that on
-`file://`, so opening `index.html` directly gives a blank page.
-
 ```bash
-cd "/media/mybrosky/New Volume/PremierLeague/web" && python3 -m http.server 8765
+./start.sh
 ```
 
-Then open <http://127.0.0.1:8765>.
-
-Leave that command running while you use the site; it *is* the server. It
-prints a line per request, which is a useful sign the page is loading its
-fixtures.
-
-### Stop
-
-Press `Ctrl+C` in the terminal running it.
-
-If it is running in the background from an earlier session and you no longer
-have that terminal, find it and kill it by PID:
-
 ```bash
-pgrep -af "python3 -m http.server 8765"
+./stop.sh
 ```
 
-That prints `<pid> python3 -m http.server 8765`. Then:
+`start.sh` prints the URL — <http://127.0.0.1:8765> — and hands your prompt
+back; the server keeps running behind you. Run it again when it is already up
+and it just prints the URL, so it doubles as the "is it running?" check.
 
-```bash
-kill <pid>
-```
+Details, for when something is off:
 
-Two steps rather than one `pkill -f`, because `-f` matches against whole
-command lines and will also hit any *other* shell that happens to have that
-string in its arguments — including the terminal you typed it in.
-
-### Check whether it is already running
-
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8765/
-```
-
-`200` means it is up; anything else, or a connection error, means start it.
-If port 8765 is taken by something else, any port works — pass a different
-number to both the server command and the URL.
+- The page has to be **served**. It fetches JSON, and browsers block that on
+  `file://`, so opening `index.html` directly gives a blank page.
+- It is `python3 -m http.server` on port 8765, serving `web/`. If that port is
+  taken, pass another: `PORT=9000 ./start.sh`.
+- Requests are logged to `server.log`, which is a useful sign the page is
+  loading its fixtures. The process id is in `.server.pid`. Both are ignored
+  by git.
+- If `.server.pid` is ever lost, find and kill the process by hand:
+  `pgrep -af "http.server 8765"`, then `kill <pid>`. By PID rather than
+  `pkill -f`, because `-f` matches whole command lines and will also hit any
+  other shell that happens to have that string in its arguments — including
+  the terminal you typed it in.
 
 ### Regenerate the dummy database
 
@@ -136,7 +117,7 @@ Not needed to view the site. This rebuilds `backend/transferroom.db` from
 scratch, and is deterministic — the same seed gives the same dataset:
 
 ```bash
-cd "/media/mybrosky/New Volume/PremierLeague/backend" && python3 -m transferroom.seed
+cd backend && python3 -m transferroom.seed
 ```
 
 ## How the frontend gets its data
@@ -244,6 +225,7 @@ Checked in-browser, not by eye:
 ## Layout
 
 ```
+start.sh / stop.sh    run the site locally
 web/                  the site — open this
   index.html          structure, all five sections
   app.css             tokens, type scale, section rhythm
@@ -256,4 +238,5 @@ backend/
   transferroom/       db, config, bands, seed  (features/model/api absent)
 docs/                 DESIGN.md and BACKEND.md as supplied
 design/               the design canvas used as visual reference
+.claude/launch.json   lets Claude Code's preview pane start the same server
 ```
