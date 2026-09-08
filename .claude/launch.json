@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "transfer-room-web",
+      "name": "fpl-assistant",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "web"],
+      "runtimeArgs": ["-m", "fpl.server", "--port", "8765"],
       "port": 8765
     }
   ]

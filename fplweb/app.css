@@ -1,0 +1,139 @@
+/* FPL Assistant — tokens first, components after.
+
+   The palette is carried over from the previous project because it was
+   measured rather than chosen: every pair in use here clears 4.5:1 on body
+   text and 3:1 on the large readouts. Difficulty colours are the one addition,
+   and they are never the only encoding — the rating is printed inside them. */
+
+:root {
+  --ink:      #1D1D1F;
+  --paper:    #FFFFFF;
+  --mist:     #F5F5F7;
+  --slate:    #6E6E73;
+  --hairline: #D2D2D7;
+
+  --good:     #1D7A3E;
+  --bad:      #C4442E;
+  --flag:     #B8791F;
+
+  /* Fixture difficulty 1-5, dark enough to carry white text at 12px. */
+  --fdr-1: #14663A;
+  --fdr-2: #2F7D4F;
+  --fdr-3: #6E6E73;
+  --fdr-4: #A4522A;
+  --fdr-5: #8E2C1E;
+
+  --t-hero:    44px;
+  --t-display: 28px;
+  --t-title:   20px;
+  --t-body:    16px;
+  --t-caption: 13px;
+  --t-mono:    13px;
+
+  --gutter: 24px;
+  --radius: 10px;
+
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--mist);
+  color: var(--ink);
+  font: var(--t-body)/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { width: 100%; max-width: 1080px; margin-inline: auto; padding-inline: max(4vw, var(--gutter)); }
+
+/* ------------------------------------------------------------------ header */
+
+.top { background: var(--ink); color: #F5F5F7; padding-block: 28px 32px; }
+.top h1 { margin: 0 0 4px; font-size: var(--t-hero); letter-spacing: -0.02em; }
+.top .sub { margin: 0; color: #98989D; font-size: var(--t-body); }
+.top .gw { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 20px; }
+.top .gw div { display: grid; gap: 2px; }
+.top .gw dt { color: #98989D; font-size: var(--t-caption); }
+.top .gw dd { margin: 0; font-size: var(--t-title); font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------------- form */
+
+.panel {
+  background: var(--paper); border: 1px solid var(--hairline);
+  border-radius: var(--radius); padding: 20px; margin-top: 24px;
+}
+.panel h2 { margin: 0 0 4px; font-size: var(--t-display); letter-spacing: -0.01em; }
+.panel .hint { margin: 0 0 16px; color: var(--slate); font-size: var(--t-caption); }
+
+.form { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.field { display: grid; gap: 6px; }
+.field span { font-size: var(--t-caption); color: var(--slate); }
+.field input, .field select {
+  font: inherit; padding: 10px 12px; border: 1px solid var(--hairline);
+  border-radius: 8px; background: var(--paper); color: var(--ink); min-width: 0;
+}
+.field input:focus-visible, .field select:focus-visible, button:focus-visible {
+  outline: 3px solid var(--ink); outline-offset: 2px;
+}
+#team { width: 190px; font-variant-numeric: tabular-nums; }
+.field--narrow input, .field--narrow select { width: 110px; }
+
+button.go {
+  font: inherit; font-weight: 600; padding: 10px 22px; border: 0;
+  border-radius: 8px; background: var(--ink); color: var(--paper); cursor: pointer;
+}
+button.go:disabled { opacity: 0.5; cursor: progress; }
+
+/* ------------------------------------------------------------------ states */
+
+.state { margin-top: 24px; padding: 18px 20px; border-radius: var(--radius);
+         background: var(--paper); border: 1px solid var(--hairline); }
+.state--error { border-color: var(--bad); }
+.state h3 { margin: 0 0 4px; font-size: var(--t-title); }
+.state p { margin: 0; color: var(--slate); }
+.state code { font-size: var(--t-mono); color: var(--bad); }
+
+/* ---------------------------------------------------------------- results */
+
+.grid { display: grid; gap: 24px; grid-template-columns: 1fr; margin-block: 24px 56px; }
+@media (min-width: 900px) { .grid--split { grid-template-columns: 1.15fr 1fr; } }
+
+.move { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px;
+        align-items: baseline; padding-block: 10px; border-top: 1px solid var(--hairline); }
+.move:first-of-type { border-top: 0; }
+.move .dir { font-size: var(--t-caption); font-weight: 600; letter-spacing: 0.04em; }
+.move .dir--out { color: var(--bad); }
+.move .dir--in  { color: var(--good); }
+.move .who { font-size: var(--t-body); }
+.move .meta { color: var(--slate); font-size: var(--t-caption); }
+.move .num { font-variant-numeric: tabular-nums; color: var(--slate); font-size: var(--t-caption); }
+
+.verdict { margin-top: 16px; padding: 14px 16px; border-radius: 8px;
+           background: var(--mist); font-size: var(--t-body); }
+.verdict b { font-variant-numeric: tabular-nums; }
+
+table { width: 100%; border-collapse: collapse; font-size: var(--t-caption); }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--hairline); }
+th { color: var(--slate); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+tr.pick td { background: #F0F7F2; }
+
+.scroll { overflow-x: auto; }
+
+.fdr { display: inline-flex; align-items: center; justify-content: center;
+       min-width: 30px; padding: 2px 5px; border-radius: 5px; color: #fff;
+       font-size: 11px; font-variant-numeric: tabular-nums; }
+.fdr-1 { background: var(--fdr-1); } .fdr-2 { background: var(--fdr-2); }
+.fdr-3 { background: var(--fdr-3); } .fdr-4 { background: var(--fdr-4); }
+.fdr-5 { background: var(--fdr-5); }
+
+.tag { font-size: 11px; padding: 1px 6px; border-radius: 999px;
+       background: var(--ink); color: var(--paper); margin-left: 6px; }
+.tag--v { background: var(--slate); }
+.warn { color: var(--flag); }
+
+.foot { color: var(--slate); font-size: var(--t-caption); padding-block: 28px 48px; }
+.foot p { margin: 0 0 6px; max-width: 68ch; }

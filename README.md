@@ -1,259 +1,180 @@
-# Transfer Room
+# FPL Assistant
 
-A single-page web app showing Premier League transfer probabilities, built from
-[`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/BACKEND.md`](docs/BACKEND.md), with
-[`design/Transfer Room.dc.html`](design/Transfer%20Room.dc.html) as the visual
-reference.
+Put in your Fantasy Premier League team id, get back the transfers worth making
+for the coming gameweek, the eleven to start, who to captain, and whether this
+is the week to play your wildcard.
 
-## Status in one line
+Everything runs on the public FPL API. No key, no signup, no `pip`, no build
+step — Python 3 and a browser are the whole toolchain.
 
-The **UI is finished and working**. The **backend is a deliberate skeleton** —
-schema, database layer and a dataset simulator exist, but features, model and
-API are not written, so the page runs on fixture files rather than a live
-service.
-
-Nothing here needs installing. No `pip`, no Postgres, no Node, no build step —
-Python 3 and a browser are the whole toolchain.
-
----
-
-## What has been done
-
-**The whole page**, all five sections of DESIGN.md 3, in `web/`:
-
-- **1 Hero** — headline and probability driven by whoever tops the board, with
-  the orchestrated load sequence (cutout fade, 120 ms headline stagger, 900 ms
-  count-up).
-- **2 Board** — horizontally scrolling snap cards, arrow-key navigation,
-  4 px hover lift.
-- **3 Explanation** — half-bleed portrait, factor bars in plain language,
-  ordered by contribution, no numbers printed on the bars. Clicking any board
-  card swaps this section to that player.
-- **4 Club view** — dropdown with a 180 ms cross-fade, left-aligned rows with
-  a probability meter and a tabular value at the right edge.
-- **5 Method** — calibration curve, precision@20 against the naive baseline,
-  and the misses, at a 68-character measure.
-- Footer, disclaimer, error state, empty state, initials fallback for missing
-  photography, and the full type and colour system as tokens.
-
-**The colour ramp** (`web/ramp.js`) — OKLab interpolation with band-holding
-behaviour, written from scratch. See the judgement calls below.
-
-**The data layer** in `backend/`:
-
-- `sql/schema.postgres.sql` — the BACKEND.md 3 schema, plus the
-  `squad_membership`, `club_finance`, `player_window_features` and `model_run`
-  tables 4–6 need but 3 does not define.
-- `sql/schema.sqlite.sql` — a SQLite translation so local dev needs no server.
-- `db.py`, `config.py`, `bands.py` — one interface over both databases, and the
-  band thresholds in a single place.
-- `seed.py` — a simulator producing ~1,800 labelled player-windows across the
-  four clubs at a 19% positive rate, with correct observation dates so the
-  leak rule is enforceable later.
-
-**Verified in-browser**, not by eye: responsive to 360 px with no horizontal
-scroll, contrast measured on the token pairs actually in use, keyboard
-reachability, the error state and its recovery. Figures are in
-"Verified against the quality floor" below.
-
----
-
-## What is still to do
-
-In BACKEND.md's own build order. Each depends on the one above it.
-
-| # | Piece | Notes |
-|---|---|---|
-| 1 | **Feature builder** (5) | One row per player-window, every feature computed as of `opens_on`, nothing read with `observed_on > opens_on`. The schema already carries the dates that make this enforceable and `seed.py` writes them correctly, so this is a query, not a data-model change. |
-| 2 | **Model and evaluation** (6) | LightGBM, temporal split, isotonic calibration, precision@20 and Brier against the contract-length baseline. Needs `pip`, which this machine does not currently have. |
-| 3 | **FastAPI service** (7) | The five endpoints, Redis cache, the two contract additions listed below. |
-| 4 | **Point the page at it** | One attribute: `<html data-api="/api/v1">`. No other frontend change. |
-| 5 | **Real data** | Every source is licensed or restricted — see "Why the data is placeholder" below. This is a procurement decision, not a coding one. |
-
-Smaller outstanding items:
-
-- The **empty-club state** is implemented but no longer reachable from the
-  fixtures, because all four clubs now have players. To see it, empty the
-  `movements` array in `web/fixtures/clubs/4.json`.
-- **Photography** is absent by design; every portrait renders the initials
-  fallback. `portrait()` in `app.js` already handles real images and falls back
-  on load error, so a licensed feed needs no code change.
-- `spec-extract/` is the unpacked source zip, left where it was. Safe to delete.
-
----
-
-## How to start and stop it
-
-### Start
-
-The page must be **served** — it fetches JSON, and browsers block that on
-`file://`, so opening `index.html` directly gives a blank page.
+## Start and stop
 
 ```bash
-cd "/media/mybrosky/New Volume/PremierLeague/web" && python3 -m http.server 8765
+./start.sh
 ```
-
-Then open <http://127.0.0.1:8765>.
-
-Leave that command running while you use the site; it *is* the server. It
-prints a line per request, which is a useful sign the page is loading its
-fixtures.
-
-### Stop
-
-Press `Ctrl+C` in the terminal running it.
-
-If it is running in the background from an earlier session and you no longer
-have that terminal, find it and kill it by PID:
 
 ```bash
-pgrep -af "python3 -m http.server 8765"
+./stop.sh
 ```
 
-That prints `<pid> python3 -m http.server 8765`. Then:
+`start.sh` prints the URL — <http://127.0.0.1:8765> — and hands your prompt
+back. Run it again when it is already up and it just prints the URL, so it also
+answers "is it running?".
+
+Or skip the browser:
 
 ```bash
-kill <pid>
+python3 -m fpl.cli --team 1234567
 ```
 
-Two steps rather than one `pkill -f`, because `-f` matches against whole
-command lines and will also hit any *other* shell that happens to have that
-string in its arguments — including the terminal you typed it in.
+Your team id is the number in the URL when you view your own team on the FPL
+site: `/entry/`**`1234567`**`/event/…`. It is a public id — the same one that
+appears in league tables — and nothing about your team is stored here.
 
-### Check whether it is already running
+## What it actually decides
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8765/
+**Transfers, priced properly.** Every plan from zero transfers upwards is
+scored, and the one with the best *net* figure wins:
+
+```
+net = points gained over the horizon − 4 × (transfers beyond your free ones)
 ```
 
-`200` means it is up; anything else, or a connection error, means start it.
-If port 8765 is taken by something else, any port works — pass a different
-number to both the server command and the URL.
+Three things follow from that, and they are the reasons this tends to disagree
+with a gut call:
 
-### Regenerate the dummy database
+- **A hit is judged over four gameweeks, not one.** Over a single gameweek
+  almost no hit ever pays; over a season almost every hit does. Four gameweeks
+  is roughly how long a transfer's edge survives before form, fixtures and
+  prices move on. Change it with `--horizon`, or the dropdown.
+- **Free transfers now roll over, up to five, so an unused one is not wasted.**
+  The bar for spending one is higher than it used to be, and "roll it" is a
+  recommendation this will make.
+- **A move is scored on what it does to your squad, not to the player.**
+  Upgrading a bench goalkeeper looks like a big gain on raw projections and is
+  worth nearly nothing in points. Candidates are shortlisted on the raw
+  difference, then rescored by rebuilding the eleven around the change.
 
-Not needed to view the site. This rebuilds `backend/transferroom.db` from
-scratch, and is deterministic — the same seed gives the same dataset:
+**The eleven and the captain.** There are only eight legal formations, so all
+eight are tried and the best is kept. The captain is the highest projected
+starter, chosen after the eleven — a player who does not start cannot wear the
+armband. The bench comes back in automatic-substitution order.
 
-```bash
-cd "/media/mybrosky/New Volume/PremierLeague/backend" && python3 -m transferroom.seed
+**The wildcard.** An optimal fifteen is built from scratch against your budget,
+then compared **against the best ordinary plan** rather than against standing
+still. Almost any wildcard beats standing still; the question is whether it
+beats what your free transfers and a sensible hit would have got you anyway.
+It has to win by 8 points before the recommendation flips, because the chip is
+a one-shot resource and a marginal gain is not a reason to burn it. Whether you
+still *have* it is read from your history against the two published windows.
+
+## Where the numbers come from
+
+Expected points per player per gameweek, from the terms of the actual scoring
+system:
+
+```
+xP = P(appears) × appearance points
+   + expected goals   × points per goal for the position
+   + expected assists × 3
+   + P(clean sheet)   × clean sheet points for the position
+   + saves / 3                       (goalkeepers)
+   − expected goals conceded / 2     (goalkeepers and defenders)
+   + expected bonus
+   + P(defensive contribution) × 2
 ```
 
-## How the frontend gets its data
+Rates come from each player's own per-90 statistics, **shrunk towards the
+positional average** by a weight that grows with minutes played. That is what
+stops a striker with one goal from a single cameo reading as a 1.0 xG/90
+player, and it is the difference between a model that recommends him and one
+that does not.
 
-`web/api.js` reads a base path off the root element. Unset, it serves the
-fixtures in `web/fixtures/`, which are shaped exactly like the responses in
-BACKEND.md 7. When the service exists, this becomes a one-line change:
+Fixtures are FPL's own 1–5 difficulty ratings, applied to attacking output,
+clean-sheet probability and goals conceded, with a small home adjustment.
+Blank and double gameweeks fall out for free: a blank is an empty fixture list
+and scores zero, a double is two entries and the terms add.
 
-```html
-<html lang="en-GB" data-api="/api/v1">
+For the immediate gameweek the estimate is blended 65/35 with FPL's own
+published `ep_next`, which sees team news this model cannot.
+
+### What it does not know
+
+- **Rotation and team news beyond the flags.** A fit player who has quietly
+  lost his place still projects as a starter until the minutes data catches up.
+- **Anything tactical.** Fixture difficulty knows Arsenal away is hard. It does
+  not know their centre-backs are suspended.
+- **Your purchase prices.** Selling price is taken as the current price, so a
+  squad sitting on price rises has slightly more money than this assumes. FPL
+  only exposes true selling prices to the logged-in manager.
+
+## The rules it plays by
+
+Squad size, the eleven, the three-per-club cap, the £100.0m budget, the 50%
+sell-on fee, the five-transfer bank and both wildcard windows are all read from
+`bootstrap-static` at runtime — that block *is* the configuration the live game
+runs on, so it cannot drift out of date here without drifting in the real game.
+
+The one number the API does not publish is the 4-point charge for a transfer
+beyond your free ones. It is pinned as a single named constant in
+[`fpl/rules.py`](fpl/rules.py) with its source, and that is the only line to
+edit if it ever changes.
+
+Reference: <https://fantasy.premierleague.com/en/help/rules>
+
+## API
+
+The page is a client of a small local service; the same endpoints are yours.
+
+| Route | Returns |
+|---|---|
+| `GET /api/healthz` | up, current gameweek, whether upstream is reachable |
+| `GET /api/gameweek` | next gameweek, deadline, horizon, the rule constants |
+| `GET /api/players?search=&limit=` | name search, best projected first |
+| `GET /api/advice?team=&horizon=&max_transfers=&free_transfers=` | the whole report |
+| `POST /api/advice` | the same, from `{"players": [...15...], "bank": 0, "free_transfers": 1}` |
+
+Failures all arrive in one envelope, with a code you can branch on rather than
+prose you have to parse:
+
+```json
+{ "error": { "code": "team_not_found",
+             "message": "No FPL team with id 999999999. ...",
+             "status": 404 } }
 ```
 
-No other frontend change is needed.
-
-### Two additions to the documented API contract
-
-DESIGN.md asks for things BACKEND.md 7 does not return. Both are in the
-fixtures and will need to exist on the real endpoints:
-
-1. **`/board` players need `destination` and `updated_at`.** 2 puts
-   "current club → predicted destination" and a last-updated caption on every
-   card, and the documented payload carries neither.
-2. **`GET /clubs` needs to exist.** 4's dropdown has to populate from
-   something; the documented endpoints only cover a single club's movements.
-
-## Design decisions that needed a judgement call
-
-Three places where following the spec literally produced a worse result. Each
-is commented at the point it happens in the code.
-
-### The ramp is banded, not linearly interpolated
-
-DESIGN.md asks for two things that pull against each other: each band means
-something specific (`--p-hot` is "50–85% — expect movement"), and "a value
-moving from 48% to 52% shifts smoothly rather than snapping".
-
-Interpolating the whole range between band anchors satisfies the second and
-destroys the first. Measured from the first implementation: 10% rendered
-`#ad7b8b`, a dusty pink; 70% rendered `#816c00`, olive; 84% rendered
-`#287a38`, green — a value the server had called `hot`, drawn in the `done`
-colour.
-
-`web/ramp.js` instead holds each band's colour across its range and blends only
-within ±3 points of a boundary — sized to the 48%/52% example the spec itself
-gives. Those two now render `#bb7123` and `#c34e2c`, a clear smooth shift,
-while everything from 54% to 81% stays pure `--p-hot` red.
-
-The blend was ±5 first. At that width 84% came out brown-gold rather than the
-red its `hot` band calls for, because too much of the band sat inside the
-crossing.
-
-### Boundary blends interpolate in OKLab, not OKLCH
-
-For cold→warm and warm→hot the two are nearly identical. At the hot→done
-boundary they are not: rotating hue from red to green passes through saturated
-yellow, so 86% rendered mustard — the warm band's own colour, on a `done`
-value. That breaks the rule the ramp exists to protect. OKLab desaturates
-through the crossing instead of borrowing another band's hue.
-
-### Club-row percentages are `--ink`, not ramp-coloured
-
-The design canvas colours them with the ramp. At `--t-body` (17px) they are
-body text and need 4.5:1; measured against `--paper`, `--p-cold` is 3.26:1 and
-`--p-warm` is 3.63:1, so cold and warm values failed the quality floor.
-DESIGN.md 4 describes the row as "a probability bar running the width of the
-row with the value at the right edge" and does not colour the value, so the bar
-carries the encoding and the numeral stays readable.
-
-## Why the data is placeholder
-
-DESIGN.md 4 and BACKEND.md 10 both land in the same place: press photography
-is agency-owned, Transfermarkt's terms rule out commercial reuse, and FBref's
-rule out public hosting. So nothing here fabricates claims about a real person.
-
-- **All player names are dummy placeholders.** Ten first names crossed with ten
-  surnames, in both the fixtures and `seed.py`. No probability here is attached
-  to a real person. Club names are real, but every figure beside them is
-  invented — the footer says so.
-- **The dataset's shape is real** — observation dates, leak rules, class
-  balance — so the pipeline that runs on it is the pipeline that would run on a
-  licensed feed.
-- **No images.** Every portrait renders the initials fallback DESIGN.md 4
-  specifies for missing players. When a licensed feed supplies `image.cutout`
-  and `image.square`, `portrait()` in `app.js` uses them and falls back on
-  error.
-
-## Verified against the quality floor (6)
-
-Checked in-browser, not by eye:
-
-- Responsive to 360px with no horizontal scroll; hero drops to 44px, display to
-  34px, section padding to 72px.
-- Contrast: ink on paper 16.8:1, slate on paper 5.07:1, slate on mist 4.66:1,
-  dark-section muted on ink 5.86:1. Ramp bands on `--paper` run 3.26–5.38:1 —
-  used only on large readouts (40px cards, 88px hero) where 3:1 applies.
-- Colour is never the only encoding; every probability shows its number.
-- Arrow keys move between board cards, focus ring visible at 3px offset 2px.
-- `prefers-reduced-motion` cuts the count-up and all reveals; the number is
-  correct instantly.
-- Error state shows "Predictions didn't load. Retry" and recovers on retry
-  (tested by stubbing `fetch` to reject).
-- Empty club shows "No moves above 20% at this club" — verified while a club
-  with no movements was still in the fixtures.
+The full set is declared in `ERROR_CODES` in [`fpl/server.py`](fpl/server.py) —
+`invalid_team_id`, `team_not_found`, `team_not_started`, `unknown_player`,
+`ambiguous_player`, `squad_size`, `duplicate_player`, `position_quota`,
+`club_limit`, `over_budget`, `upstream_error`, `upstream_unreachable`, and the
+rest — so the contract is documented rather than discovered.
 
 ## Layout
 
 ```
-web/                  the site — open this
-  index.html          structure, all five sections
-  app.css             tokens, type scale, section rhythm
-  app.js              hero sequence, board, factors, club view, charts
-  ramp.js             the probability colour ramp
-  api.js              endpoint map; swaps fixtures for the live API
-  fixtures/           API-shaped JSON standing in for the service
-backend/
-  sql/                Postgres schema + SQLite translation
-  transferroom/       db, config, bands, seed  (features/model/api absent)
-docs/                 DESIGN.md and BACKEND.md as supplied
-design/               the design canvas used as visual reference
+start.sh / stop.sh   run it
+fpl/
+  rules.py           the game's rules, mostly read from the live config
+  data.py            FPL API client, disk cache, typed failures
+  projection.py      expected points per player per gameweek
+  squad.py           legality, best eleven, captaincy
+  advice.py          transfers, hit arithmetic, wildcard verdict
+  engine.py          assembles one report
+  cli.py             terminal front end
+  server.py          HTTP service + static files
+fplweb/              the page
+.cache/fpl/          cached API responses (gitignored)
 ```
+
+## Caching and manners
+
+`bootstrap-static` is 1.7 MB and this is someone else's server, so responses
+are cached on disk — an hour for the player list and fixtures, two minutes for
+anything manager-specific. Requests are serial, carry a real user agent, and
+back off on 429s and 5xxs. `--refresh` on the CLI clears the cache; the deleted
+files come straight back on the next call.
+
+## Not affiliated
+
+Data from the public Fantasy Premier League API. This is not affiliated with or
+endorsed by the Premier League. Projections are estimates, not forecasts.
