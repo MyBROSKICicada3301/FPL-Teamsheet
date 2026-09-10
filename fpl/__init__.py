@@ -1,4 +1,4 @@
-"""FPL Assistant, squad, transfer and wildcard advice for the next gameweek."""
+"""FPL Teamsheet, squad, transfer and wildcard advice for the next gameweek."""
 
 # Settings are loaded here, before any submodule is imported, because several
 # of them read configuration into module-level constants at import time. See

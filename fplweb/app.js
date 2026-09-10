@@ -1,4 +1,4 @@
-/* FPL Assistant, page behaviour.
+/* FPL Teamsheet, page behaviour.
  *
  * Framework-free: one form, one fetch, and a set of renderers. The layout is
  * the Modernist canvas, so the work here is mostly turning API rows into the

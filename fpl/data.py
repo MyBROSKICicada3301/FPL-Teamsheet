@@ -39,7 +39,7 @@ TTL = {
 
 TIMEOUT = 30
 RETRIES = 3
-USER_AGENT = "fpl-assistant/0.1 (+local tool)"
+USER_AGENT = "fpl-teamsheet/0.1 (+local tool)"
 
 
 class FPLError(RuntimeError):

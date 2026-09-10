@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Serve the FPL Assistant on http://127.0.0.1:8765 in the background.
+# Serve the FPL Teamsheet on http://127.0.0.1:8765 in the background.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -47,7 +47,7 @@ echo $! >"$PIDFILE"
 # health check answers immediately now — projections load in the background and
 # report themselves as "starting" — so this only has to cover process startup.
 if curl -fs -m 10 -o /dev/null --retry 15 --retry-delay 1 --retry-connrefused "$URL/api/healthz"; then
-  echo "FPL Assistant running at $URL"
+  echo "FPL Teamsheet running at $URL"
   echo "Stop it with ./stop.sh   ·   request log in server.log"
 else
   echo "Server failed to start. Last lines of server.log:" >&2

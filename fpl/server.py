@@ -103,7 +103,7 @@ def invalidate() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "fpl-assistant"
+    server_version = "fpl-teamsheet"
     protocol_version = "HTTP/1.1"
 
     # ------------------------------------------------------------- plumbing
@@ -537,7 +537,7 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
             ) from None
         raise
 
-    print(f"FPL Assistant on http://{host}:{port}", flush=True)
+    print(f"FPL Teamsheet on http://{host}:{port}", flush=True)
 
     _preload_async()
 

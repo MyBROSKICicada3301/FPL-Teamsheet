@@ -1,4 +1,4 @@
-# FPL Assistant
+# FPL Teamsheet
 
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
@@ -23,8 +23,8 @@ each of the next four gameweeks, and a written briefing that cites its sources](
 ## Try it
 
 ```bash
-git clone https://github.com/MyBROSKICicada3301/fpl-assistant.git
-cd fpl-assistant
+git clone https://github.com/MyBROSKICicada3301/fpl-teamsheet.git
+cd fpl-teamsheet
 ./start.sh
 ```
 
