@@ -1,259 +1,215 @@
 # FPL Assistant
 
-Put in your Fantasy Premier League team id, get back the transfers worth making
-for the coming gameweek, the eleven to start, who to captain, and whether this
-is the week to play your wildcard.
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#for-developers)
 
-Everything runs on the public FPL API. No key, no signup, no `pip`, no build
-step — Python 3 and a browser are the whole toolchain.
+Tells you what to do before the next Fantasy Premier League deadline: which
+transfers are worth making, who to captain, and whether this is the week to
+spend a chip. It shows the arithmetic behind every call, so you can disagree
+with it.
 
-## Start and stop
+**Nothing to install.** No `pip`, no npm, no build step, no API key. If you have
+Python 3.10 or newer and a browser, you have everything.
+
+Free to use, modify and redistribute under the [MIT licence](LICENSE).
+
+![The planner: recommended transfers with every rejected option beside them, the
+starting eleven compared before and after, all four chips with their value in
+each of the next four gameweeks, and a written briefing that cites its sources](Docs/Sample.png)
+
+---
+
+## Try it
 
 ```bash
+git clone https://github.com/MyBROSKICicada3301/fpl-assistant.git
+cd fpl-assistant
 ./start.sh
 ```
 
-```bash
-./stop.sh
+Open <http://127.0.0.1:8765>, put in your team id, press **Get advice**.
+
+Stop it with `./stop.sh`.
+
+### Where do I find my team id?
+
+Log in to the FPL site, click **Pick Team**, and look at the address bar:
+
+```
+https://fantasy.premierleague.com/entry/1234567/event/4
+                                        ^^^^^^^
 ```
 
-`start.sh` prints the URL — <http://127.0.0.1:8765> — and hands your prompt
-back. Run it again when it is already up and it just prints the URL, so it also
-answers "is it running?".
+That number is your team id. It is public, the same one that appears in league
+tables, and nothing about your team is stored by this tool.
 
-Or skip the browser:
+### Prefer the terminal?
 
 ```bash
-python3 -m fpl.cli
+python3 -m fpl.cli --team 1234567
 ```
 
-With `FPL_TEAM_ID` set in `.env` that is the whole command; otherwise pass
-`--team 1234567`. Add `--coach` for the written briefing.
+```
+──────────────────────────────────────────────────────────────────────
+  GAMEWEEK 4   deadline 2026-09-12T12:30:00Z
+  planning over gameweeks 4-7  ·  2 free transfer(s)  ·  bank £0.0m
+  chips played: Triple Captain (GW3) · still held: Wildcard, Free Hit, Bench Boost
+──────────────────────────────────────────────────────────────────────
 
-Your team id is the number in the URL when you view your own team on the FPL
-site: `/entry/`**`1234567`**`/event/…`. It is a public id — the same one that
-appears in league tables — and nothing about your team is stored here.
+TRANSFERS
+  OUT  Rashford         MID   £7.0m
+  IN   Ødegaard         MID   £6.6m   +7.43 pts over the horizon
+  OUT  Araujo           DEF   £5.4m
+  IN   Calafiori        DEF   £5.7m   +7.15 pts over the horizon
 
-## Settings
+  2 transfer(s), hit 0 pts, net +14.58 pts
 
-Secrets and personal values live in `.env`, which is gitignored. `.env.example`
-is the committed template:
+  Every option considered:
+     transfers    gross   hit      net
+             0     0.00     0     0.00
+             1     7.43     0     7.43
+             2    14.58     0    14.58 <-
+             3    18.20     4    14.20
+
+STARTING ELEVEN  (4-4-2, 70.4 xP including the captain)
+  captain: Haaland, keep it
+```
+
+---
+
+## What it tells you
+
+**Transfers, with the hit priced in.** Every plan from zero transfers upwards is
+scored and shown side by side, so you can see the trade rather than take it on
+trust. Doing nothing is always one of the options, and it often wins.
+
+**Your eleven and your captain.** All eight legal formations are tried and the
+best is kept. It shows the captain you have now next to the one it suggests, so
+a recommendation never reads as a claim about your team.
+
+**Old squad and new squad, side by side.** Both scored the same way, neither one
+dimmed. You are being asked to judge whether the change is worth making.
+
+**All four chips.** What each would earn if you played it this week, and what it
+would earn in each of the next few gameweeks. A chip worth 13 points now still
+comes back as "hold" if it is worth 15 in a fortnight.
+
+**A written briefing**, optionally. See below.
+
+---
+
+## Three things it does differently
+
+**A hit is judged over four gameweeks, not one.** Over a single gameweek almost
+no 4 point hit ever pays; over a season almost all of them do. Four is roughly
+how long a transfer's edge lasts before form and fixtures move on.
+
+**A hit must win by a real margin.** The hit is a certain loss bought with an
+estimated gain. Without a margin the tool once recommended paying 4 certain
+points for an edge of 0.08, which is noise.
+
+**A move is scored on what it does to your squad, not to the player.** Upgrading
+a bench goalkeeper looks like a huge gain on paper and is worth almost nothing
+in points, because he never plays.
+
+The full method, with the formulas, is at **/method.html** once the app is
+running, or in [`fplweb/method.html`](fplweb/method.html).
+
+---
+
+## Optional: the written briefing
+
+A plain-English summary of the numbers, written by Gemini. It is given the
+figures and forbidden from adding anything to them, and every claim carries a
+tag naming its source.
+
+You need a free [Google AI Studio](https://aistudio.google.com/apikey) key:
 
 ```bash
 cp .env.example .env
+# put your key in .env, then
+./start.sh
 ```
+
+Without a key everything else works and the briefing panel simply hides itself.
+
+---
+
+## Settings
+
+Everything lives in `.env`, which is gitignored. Copy `.env.example` to start.
 
 | Variable | What it does |
 |---|---|
-| `GEMINI_API_KEY` | Google AI Studio key for the written briefing. Without it everything else works and the briefing panel hides itself. |
-| `GEMINI_MODEL` | Which model writes the briefing. Defaults to `gemini-flash-latest`. |
-| `FPL_TEAM_ID` | Your team id. Makes `python3 -m fpl.cli` work with no arguments and prefills the web form. Public, not a credential. |
-| `FPL_CACHE` | Where cached API responses go. Defaults to `.cache/fpl`. |
-| `PORT` | Port for `./start.sh` and the server. Defaults to 8765. |
+| `GEMINI_API_KEY` | Enables the written briefing. Optional. |
+| `GEMINI_MODEL` | Which model writes it. Defaults to `gemini-flash-latest`. |
+| `FPL_TEAM_ID` | Your team id, so the CLI needs no arguments and the web form is prefilled. |
+| `PORT` | Defaults to 8765. |
 
-**Anything already exported in your shell wins over the file**, so a one-off
-override still works:
+Anything already exported in your shell wins over the file.
 
-```bash
-GEMINI_MODEL=gemini-3.6-flash ./start.sh
-```
+---
 
-`fpl/env.py` loads the file at package import, before any module reads its
-configuration into a constant. `start.sh` reads it too, with the same
-precedence, so the server process inherits the key.
+## What it cannot see
 
-Two things worth knowing. The key sits in plain text on disk, which is the
-normal trade for not typing it every time, but it means the file is worth no
-less care than the key itself. And this checkout is on a filesystem that does
-not carry Unix permissions, so `chmod 600` on `.env` does not stick here.
+- **Team news beyond the injury flags.** A fit player who has quietly lost his
+  place still projects as a starter until the minutes data catches up.
+- **Anything past the horizon.** Chip values cover the gameweeks in view. Double
+  gameweeks are often announced later than this data reflects.
+- **Your purchase prices.** Selling price is taken as the current price, because
+  FPL only tells the logged-in manager what a player would actually sell for.
 
-## What it actually decides
+Projections are estimates, not forecasts. Nobody scores their expected points.
+This is not betting advice.
 
-**Transfers, priced properly.** Every plan from zero transfers upwards is
-scored, and the one with the best *net* figure wins:
+---
 
-```
-net = points gained over the horizon − 4 × (transfers beyond your free ones)
-```
+## For developers
 
-Three things follow from that, and they are the reasons this tends to disagree
-with a gut call:
-
-- **A hit is judged over four gameweeks, not one.** Over a single gameweek
-  almost no hit ever pays; over a season almost every hit does. Four gameweeks
-  is roughly how long a transfer's edge survives before form, fixtures and
-  prices move on. Change it with `--horizon`, or the dropdown.
-- **Free transfers now roll over, up to five, so an unused one is not wasted.**
-  The bar for spending one is higher than it used to be, and "roll it" is a
-  recommendation this will make.
-- **A move is scored on what it does to your squad, not to the player.**
-  Upgrading a bench goalkeeper looks like a big gain on raw projections and is
-  worth nearly nothing in points. Candidates are shortlisted on the raw
-  difference, then rescored by rebuilding the eleven around the change.
-
-**The eleven and the captain.** There are only eight legal formations, so all
-eight are tried and the best is kept. The captain is the highest projected
-starter, chosen after the eleven — a player who does not start cannot wear the
-armband. The bench comes back in automatic-substitution order.
-
-**The wildcard.** An optimal fifteen is built from scratch against your budget,
-then compared **against the best ordinary plan** rather than against standing
-still. Almost any wildcard beats standing still; the question is whether it
-beats what your free transfers and a sensible hit would have got you anyway.
-It has to win by 8 points before the recommendation flips, because the chip is
-a one-shot resource and a marginal gain is not a reason to burn it. Whether you
-still *have* it is read from your history against the two published windows.
-
-## How calculations are made
-
-The page at `/method.html` sets out the whole method, with the formulas. The
-short version:
+Python standard library and vanilla ES modules. No dependencies at all.
 
 ```
-xP          = P(appears) x appearance points
-            + expected goals x points per goal for the position
-            + expected assists x 3
-            + P(clean sheet) x clean sheet points for the position
-            + saves / 3                        (goalkeepers)
-            - expected goals conceded / 2      (goalkeepers and defenders)
-            + expected bonus
-            + P(defensive contribution) x 2
-
-squad score = sum over each gameweek in the horizon of
-              ( best eleven's xP + the captain's xP again + 0.12 x bench xP )
-
-net         = points gained over the horizon
-            - 4 x (transfers beyond your free ones)
+fpl/          rules, data, projection, squad, advice, chips, engine, cli, server
+fplweb/       the page, and method.html
+start.sh      run it       stop.sh   stop it
 ```
 
-**A squad score covers the whole horizon, not one gameweek**, counts the
-captain twice, and carries a 0.12 bench weight, which is why 310 is roughly 78
-a gameweek rather than 310 in a week. The bench weight exists so the optimiser
-cannot fill four bench slots with players who never play and call it efficient.
-
-Chip values are the extra points the chip would earn *this* gameweek: Triple
-Captain is the captain's xP again, Bench Boost the four bench projections, Free
-Hit the best possible eleven that week less your own. The wildcard is measured
-over the whole horizon instead, against the best ordinary transfer plan rather
-than against standing still.
-
-## Where the numbers come from
-
-Expected points per player per gameweek, from the terms of the actual scoring
-system:
-
-```
-xP = P(appears) × appearance points
-   + expected goals   × points per goal for the position
-   + expected assists × 3
-   + P(clean sheet)   × clean sheet points for the position
-   + saves / 3                       (goalkeepers)
-   − expected goals conceded / 2     (goalkeepers and defenders)
-   + expected bonus
-   + P(defensive contribution) × 2
-```
-
-Rates come from each player's own per-90 statistics, **shrunk towards the
-positional average** by a weight that grows with minutes played. That is what
-stops a striker with one goal from a single cameo reading as a 1.0 xG/90
-player, and it is the difference between a model that recommends him and one
-that does not.
-
-Fixtures are FPL's own 1–5 difficulty ratings, applied to attacking output,
-clean-sheet probability and goals conceded, with a small home adjustment.
-Blank and double gameweeks fall out for free: a blank is an empty fixture list
-and scores zero, a double is two entries and the terms add.
-
-For the immediate gameweek the estimate is blended 65/35 with FPL's own
-published `ep_next`, which sees team news this model cannot.
-
-### What it does not know
-
-- **Rotation and team news beyond the flags.** A fit player who has quietly
-  lost his place still projects as a starter until the minutes data catches up.
-- **Anything tactical.** Fixture difficulty knows Arsenal away is hard. It does
-  not know their centre-backs are suspended.
-- **Your purchase prices.** Selling price is taken as the current price, so a
-  squad sitting on price rises has slightly more money than this assumes. FPL
-  only exposes true selling prices to the logged-in manager.
-
-## The rules it plays by
-
-Squad size, the eleven, the three-per-club cap, the £100.0m budget, the 50%
-sell-on fee, the five-transfer bank and both wildcard windows are all read from
-`bootstrap-static` at runtime — that block *is* the configuration the live game
-runs on, so it cannot drift out of date here without drifting in the real game.
-
-The one number the API does not publish is the 4-point charge for a transfer
-beyond your free ones. It is pinned as a single named constant in
-[`fpl/rules.py`](fpl/rules.py) with its source, and that is the only line to
-edit if it ever changes.
-
-Reference: <https://fantasy.premierleague.com/en/help/rules>
-
-## API
-
-The page is a client of a small local service; the same endpoints are yours.
+The page is a client of a small local JSON API, which is yours to use:
 
 | Route | Returns |
 |---|---|
-| `GET /api/healthz` | liveness probe: answers instantly, never blocks, never waits on a build |
-| `GET /api/health` | the detailed view: cache freshness per endpoint, horizons built, the constants the scores were produced with |
-| `POST /api/refresh` | drop every cached upstream response and rebuild |
-| `GET /api/gameweek` | next gameweek, deadline, horizon, the rule constants, whether the briefing is configured |
-| `GET /api/coach?team=&horizon=` | the written briefing, generated on demand |
-| `GET /api/players?search=&limit=` | name search, best projected first |
-| `GET /api/advice?team=&horizon=&max_transfers=&free_transfers=` | the whole report |
-| `POST /api/advice` | the same, from `{"players": [...15...], "bank": 0, "free_transfers": 1}` |
+| `GET /api/advice?team=&horizon=&max_transfers=` | the whole report |
+| `GET /api/gameweek` | next gameweek, deadline, the rule constants |
+| `GET /api/players?search=` | name search |
+| `GET /api/coach?team=` | the written briefing |
+| `GET /api/health` | cache freshness, what is loaded |
+| `GET /api/healthz` | liveness probe |
+| `POST /api/refresh` | drop cached data and reload |
 
-Failures all arrive in one envelope, with a code you can branch on rather than
-prose you have to parse:
+Errors all arrive in one envelope with a code you can branch on:
 
 ```json
-{ "error": { "code": "team_not_found",
-             "message": "No FPL team with id 999999999. ...",
-             "status": 404 } }
+{ "error": { "code": "team_not_found", "message": "...", "status": 404 } }
 ```
 
-The full set is declared in `ERROR_CODES` in [`fpl/server.py`](fpl/server.py) —
-`invalid_team_id`, `team_not_found`, `team_not_started`, `unknown_player`,
-`ambiguous_player`, `squad_size`, `duplicate_player`, `position_quota`,
-`club_limit`, `over_budget`, `upstream_error`, `upstream_unreachable`, and the
-rest — so the contract is documented rather than discovered.
+Responses are cached on disk, an hour for the player list and two minutes for
+anything manager-specific, so running this does not hammer somebody else's
+server.
 
-## Layout
+---
 
-```
-start.sh / stop.sh   run it
-.env                 secrets and personal settings (gitignored)
-.env.example         the committed template
-fpl/
-  env.py             loads .env, shell environment takes precedence
-  rules.py           the game's rules, mostly read from the live config
-  data.py            FPL API client, disk cache, typed failures
-  projection.py      expected points per player per gameweek
-  squad.py           legality, best eleven, captaincy
-  advice.py          transfers, hit arithmetic, wildcard verdict
-  engine.py          assembles one report
-  coach.py           the written briefing, grounded in the figures
-  cli.py             terminal front end
-  server.py          HTTP service + static files
-fplweb/
-  index.html         the planner
-  method.html        how calculations are made
-  fonts/             Archivo, served locally so the page needs no network
-.cache/fpl/          cached API responses (gitignored)
-```
+## Licence
 
-## Caching and manners
+[MIT](LICENSE) for the code.
 
-`bootstrap-static` is 1.7 MB and this is someone else's server, so responses
-are cached on disk — an hour for the player list and fixtures, two minutes for
-anything manager-specific. Requests are serial, carry a real user agent, and
-back off on 429s and 5xxs. `--refresh` on the CLI clears the cache; the deleted
-files come straight back on the next call.
+The bundled Archivo font in `fplweb/fonts/` is not covered by that. It is the
+work of the Archivo Project Authors, licensed under the SIL Open Font License
+1.1, whose terms travel with the files: see
+[`fplweb/fonts/OFL.txt`](fplweb/fonts/OFL.txt).
 
 ## Not affiliated
 
-Data from the public Fantasy Premier League API. This is not affiliated with or
-endorsed by the Premier League. Projections are estimates, not forecasts.
+Data comes from the public Fantasy Premier League API. This project is not
+affiliated with, endorsed by, or connected to the Premier League or Fantasy
+Premier League.
