@@ -15,7 +15,6 @@ const signed = (n) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(2)}`;
 
 let COACH = { available: false };
 let LAST_QUERY = null;
-let REPORT = null;
 let VIEW = 'pitch';
 
 const POSITION_ROWS = [
@@ -24,6 +23,20 @@ const POSITION_ROWS = [
   ['MID', 'MIDFIELD'],
   ['FWD', 'ATTACK'],
 ];
+
+/* The button reports its own state rather than disappearing.
+ *
+ * "Written the briefing" is a statement of completion, not an action, so the
+ * button is disabled in that state: leaving it clickable invites a second
+ * generation that spends upstream quota to produce the same paragraphs. Asking
+ * for fresh advice resets it, which is where a regenerated briefing belongs.
+ */
+const COACH_LABELS = {
+  idle: 'Write the briefing',
+  working: 'Writing the briefing',
+  done: 'Written the briefing',
+  failed: 'Try again',
+};
 
 const FDR_TEXT = {
   1: 'Easiest fixture on the scale',
@@ -104,7 +117,7 @@ const clearState = () => { $('#state').innerHTML = ''; };
 
 /* ---------------------------------------------------------------- pieces */
 
-function fixtureChips(row, compact) {
+function fixtureChips(row) {
   if (!row.fixtures.length) {
     return `<span class="fdr fdr--none" title="No fixture in this gameweek">NONE</span>`;
   }
@@ -305,7 +318,7 @@ function tableRow(row, eleven) {
  * struck through, and only the rows that genuinely differ are marked.
  */
 function lineup(eleven, changed, mark) {
-  const row = (p, bench) => {
+  const row = (p) => {
     const isChanged = changed.has(p.id);
     const cls = isChanged ? ` lineup__row--${mark === 'OUT' ? 'gone' : 'new'}` : '';
     let tag = '';
@@ -326,9 +339,9 @@ function lineup(eleven, changed, mark) {
   };
 
   return `
-    <div class="lineup">${eleven.starters.map((p) => row(p, false)).join('')}</div>
+    <div class="lineup">${eleven.starters.map((p) => row(p)).join('')}</div>
     <div class="lineup__sub">Bench, in substitution order</div>
-    <div class="lineup">${eleven.bench.map((p) => row(p, true)).join('')}</div>`;
+    <div class="lineup">${eleven.bench.map((p) => row(p)).join('')}</div>`;
 }
 
 function renderCompare(d) {
@@ -367,6 +380,72 @@ function renderCompare(d) {
         after, inIds, 'IN',
         moves ? `${signed(delta)} xP this gameweek` : '',
       );
+}
+
+/* The four chips, spent and unspent alike.
+ *
+ * A chip is a one-shot resource, so the panel has to answer two questions at
+ * once: what is it worth this week, and is this the week. The sparkline is
+ * what answers the second one honestly. It plots the chip's value across every
+ * gameweek in view and outlines the current one, so "hold it for gameweek 6"
+ * is something the reader can see rather than something the tool asserts.
+ */
+function sparkline(byGameweek, now) {
+  const entries = Object.entries(byGameweek).map(([gw, v]) => [Number(gw), v]);
+  if (entries.length < 2) return '';
+  const peak = Math.max(...entries.map(([, v]) => v));
+  if (peak <= 0) return '';
+
+  const bars = entries.map(([gw, v]) => {
+    const classes = ['spark__bar'];
+    if (v === peak) classes.push('spark__bar--peak');
+    if (gw === now) classes.push('spark__bar--now');
+    const height = Math.max(2, Math.round((v / peak) * 34));
+    return `<span class="${classes.join(' ')}" style="height:${height}px"
+      title="Gameweek ${gw}: ${v.toFixed(1)} points"></span>`;
+  }).join('');
+
+  const labels = entries.map(([gw]) => `<span>${gw}</span>`).join('');
+  return `<div class="spark">${bars}</div><div class="spark__labels">${labels}</div>`;
+}
+
+function renderChips(d) {
+  const chips = d.chips || [];
+  $('#chips-hint').textContent = d.chips_summary
+    ? `${d.chips_summary}. `
+      + (d.doubles_next_gw
+          ? `${d.doubles_next_gw} of your players have two fixtures in GW${d.gameweek}.`
+          : `No player in your squad has two fixtures in GW${d.gameweek}, which is `
+            + `usually the week these are saved for.`)
+    : '';
+
+  $('#chips').innerHTML = chips.map((c) => {
+    const spent = c.used_in !== null && c.used_in !== undefined;
+    const state = spent ? 'spent' : (c.recommend ? 'play' : 'hold');
+    const label = spent ? `GW${c.used_in}` : (c.recommend ? 'Play it' : 'Hold');
+    const cls = spent ? ' chip--spent' : (c.recommend ? ' chip--play' : '');
+
+    const value = (!spent && c.value !== null && c.value !== undefined)
+      ? `<div class="chip__value">
+           <span class="fig">${signed(c.value)}</span>
+           <span>PTS</span>
+         </div>`
+      : '';
+
+    return `
+      <div class="chip${cls}">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px">
+          <span class="chip__name">${escapeHtml(c.name)}</span>
+          <span class="chip__state chip__state--${state}">${label}</span>
+        </div>
+        ${value}
+        ${spent ? '' : sparkline(c.by_gameweek || {}, d.gameweek)}
+        <p class="chip__note">${escapeHtml(spent
+          ? `${c.reason} ${c.blurb}`
+          : (c.note || c.reason))}</p>
+        ${spent ? '' : `<p class="chip__blurb">${escapeHtml(c.blurb)}</p>`}
+      </div>`;
+  }).join('');
 }
 
 function renderWildcard(d) {
@@ -445,9 +524,23 @@ for (const name of VIEWS) {
   $(`#view-${name}`).addEventListener('click', () => setView(name));
 }
 
-$('#refresh').addEventListener('click', () => {
-  if (LAST_QUERY) $('#form').requestSubmit();
-  else loadGameweek();
+$('#refresh').addEventListener('click', async () => {
+  // Actually drop the server's cached FPL responses. Re-running the form
+  // against an hour-old cache is not what the label promises, and prices move
+  // overnight.
+  const button = $('#refresh');
+  button.disabled = true;
+  button.textContent = 'Refreshing';
+  try {
+    await api('/api/refresh', { method: 'POST' });
+    await loadGameweek();
+    if (LAST_QUERY) $('#form').requestSubmit();
+  } catch (err) {
+    showError(err);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Refresh data';
+  }
 });
 
 $('#form').addEventListener('submit', async (event) => {
@@ -469,18 +562,19 @@ $('#form').addEventListener('submit', async (event) => {
   showBusy('Working');
   try {
     const data = await api(`/api/advice?${params}`);
-    REPORT = data;
     clearState();
     renderBand(data);
     renderTransfers(data);
     renderEleven(data);
     renderCompare(data);
+    renderChips(data);
     renderWildcard(data);
 
     LAST_QUERY = params.toString();
     $('#coach-out').innerHTML = '';
     $('#coach-go').hidden = false;
-    $('#coach-go').textContent = 'Write the briefing';
+    $('#coach-go').disabled = false;
+    $('#coach-go').textContent = COACH_LABELS.idle;
     $('#coach-go').closest('div').hidden = false;
     if (!COACH.available) {
       $('#coach-go').hidden = true;
@@ -500,11 +594,12 @@ $('#coach-go').addEventListener('click', async () => {
   if (!LAST_QUERY) return;
   const button = $('#coach-go');
   button.disabled = true;
-  button.textContent = 'Writing, up to a minute';
+  button.textContent = COACH_LABELS.working;
   $('#coach-out').innerHTML = '';
   try {
     renderCoach(await api(`/api/coach?${LAST_QUERY}`));
-    button.hidden = true;
+    button.textContent = COACH_LABELS.done;
+    // Stays disabled: the work is done and repeating it costs quota.
   } catch (err) {
     // Local to its own panel: the numbers above are still valid and must stay.
     $('#coach-out').innerHTML = `
@@ -513,9 +608,8 @@ $('#coach-go').addEventListener('click', async () => {
         <p class="muted" style="margin:0">${escapeHtml(err.message || 'Unknown error.')}</p>
         <p style="margin:6px 0 0"><code>${escapeHtml(err.code || 'unknown')}</code></p>
       </div>`;
-  } finally {
     button.disabled = false;
-    if (!button.hidden) button.textContent = 'Try again';
+    button.textContent = COACH_LABELS.failed;
   }
 });
 

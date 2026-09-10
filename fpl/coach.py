@@ -79,8 +79,12 @@ Structure, about 250 to 350 words in total:
 2. The transfer decision, and why the alternative was rejected. Quote the net
    points figures.
 3. The captaincy, with the two closest candidates and their projections.
-4. The wildcard, and whether the payload supports playing it now.
-5. One short paragraph on what this analysis cannot see.
+4. The chips: which are already spent, which are still held, and whether the
+   payload supports playing one this gameweek. If a chip is worth more in a
+   later gameweek in the payload, say which and by how much.
+5. One short paragraph on what this analysis cannot see. Note that chip values
+   only cover the gameweeks in the payload, so a better week beyond them
+   cannot be ruled out.
 """
 
 
@@ -133,6 +137,20 @@ def payload_for(report: dict) -> dict:
         "bank_m": round(report["bank"] / 10, 1),
         "points_cost_per_extra_transfer": 4,
         "chips_already_played": report.get("chips_used") or [],
+        "chips": [
+            {
+                "name": c["name"],
+                "what_it_does": c["blurb"],
+                "already_played_in_gameweek": c["used_in"],
+                "still_available": c["playable"],
+                "worth_this_gameweek": c["value"],
+                "worth_in_each_gameweek": c["by_gameweek"],
+                "tool_recommends_playing_it": c["recommend"],
+                "tool_reasoning": c["note"] or c["reason"],
+            }
+            for c in report.get("chips", [])
+        ],
+        "players_with_two_fixtures_this_gameweek": report.get("doubles_next_gw"),
         "current_captain": (report.get("current_captain") or {}).get("name"),
         "recommended_captain": eleven["captain"]["name"],
         "captain_changes": eleven.get("captain_changes"),
@@ -165,15 +183,37 @@ def payload_for(report: dict) -> dict:
 # ------------------------------------------------------------------ the call
 
 
+class Truncated(CoachError):
+    """The model stopped early. Carries the partial text so it is not lost."""
+
+    def __init__(self, message, partial):
+        super().__init__(message, "coach_truncated", 502)
+        self.partial = partial
+
+
 def _text_of(response: dict) -> str:
-    """Pull the answer out, ignoring the reasoning parts newer models return."""
+    """Pull the answer out, ignoring the reasoning parts newer models return.
+
+    A candidate that stopped on MAX_TOKENS is a *partial* briefing, and half a
+    briefing is worse than none: it reads as complete, ends mid-sentence, and
+    quietly drops whichever sections came last. Raising here means the caller
+    sees a real failure rather than a plausible-looking fragment.
+    """
     for candidate in response.get("candidates", []):
         parts = candidate.get("content", {}).get("parts", []) or []
         text = "".join(
             p["text"] for p in parts if p.get("text") and not p.get("thought")
-        )
-        if text.strip():
-            return text.strip()
+        ).strip()
+
+        reason = candidate.get("finishReason")
+        if reason and reason not in ("STOP", "FINISH_REASON_UNSPECIFIED"):
+            raise Truncated(
+                f"Gemini stopped early ({reason}). The briefing would have been "
+                "incomplete, so it was not used.",
+                text,
+            )
+        if text:
+            return text
     return ""
 
 
@@ -195,7 +235,11 @@ def ask(payload: dict, api_key: str, model: str = MODEL) -> str:
     body = json.dumps({
         "systemInstruction": {"parts": [{"text": SYSTEM}]},
         "contents": [{"role": "user", "parts": [{"text": json.dumps(payload)}]}],
-        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 4096},
+        # Reasoning tokens count against this budget on the current flash
+        # models, so it has to cover the model's thinking as well as the 350
+        # words asked for. At 4096 a briefing carrying the chip inventory ran
+        # out and came back cut off in the middle of a sentence.
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 16384},
     }).encode()
 
     url = f"{BASE_URL}/models/{model}:generateContent"

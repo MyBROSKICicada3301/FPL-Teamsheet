@@ -207,8 +207,15 @@ def best_eleven(player_ids: list[int], xp: dict[int, float], gw: int,
     )
 
 
+#: How much a bench place is worth against a starting place. Not zero, because
+#: the bench covers blanks, injuries and rotation, and not one, because it does
+#: not play. Named rather than buried in a default so /api/health can report
+#: the figure the scores were produced with.
+BENCH_WEIGHT = 0.12
+
+
 def squad_score(player_ids: list[int], projections: dict, horizon: list[int],
-                players: dict, bench_weight: float = 0.12) -> float:
+                players: dict, bench_weight: float = BENCH_WEIGHT) -> float:
     """What a squad is worth over the horizon.
 
     The bench is not worthless — it covers blanks, injuries and rotation — but

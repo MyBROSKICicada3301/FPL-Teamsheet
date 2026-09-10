@@ -43,10 +43,8 @@ def report(result: dict) -> None:
     print(f"  planning over gameweeks {result['horizon'][0]}-{result['horizon'][-1]}"
           f"  ·  {result['free_transfers']} free transfer(s)"
           f"  ·  bank {money(result['bank'])}")
-    used = result.get("chips_used") or []
-    if used:
-        print("  chips already played: "
-              + ", ".join(f"{c['name']} (GW{c['gameweek']})" for c in used))
+    if result.get("chips_summary"):
+        print(f"  chips {result['chips_summary']}")
     print(BAR)
 
     rec = result["recommended"]
@@ -88,6 +86,22 @@ def report(result: dict) -> None:
     _table(e["starters"], gw, {e["captain"]["id"]: "C", e["vice_captain"]["id"]: "V"})
     print("\n  Bench, in substitution order:")
     _table(e["bench"], gw)
+
+    print("\nCHIPS")
+    for c in result.get("chips", []):
+        if c["used_in"]:
+            print(f"  {c['name']:16} played in gameweek {c['used_in']}")
+            continue
+        value = "" if c["value"] is None else f"{c['value']:+6.1f} pts"
+        call = "PLAY IT" if c["recommend"] else "hold"
+        print(f"  {c['name']:16} {value:>11}   {call}")
+        if c["note"]:
+            print(f"    {c['note']}")
+        if c["by_gameweek"] and len(c["by_gameweek"]) > 1:
+            span = "  ".join(f"GW{g} {v:.1f}" for g, v in c["by_gameweek"].items())
+            print(f"    {span}")
+    if not result.get("doubles_next_gw"):
+        print("  No player in your squad has two fixtures this gameweek.")
 
     w = result["wildcard"]
     print("\nWILDCARD")

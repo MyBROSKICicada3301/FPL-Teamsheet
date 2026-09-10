@@ -7,7 +7,7 @@ assemble it, so the assembly lives here and they render it differently.
 import datetime as dt
 from dataclasses import dataclass, field
 
-from . import advice, data, projection, squad as squad_mod
+from . import advice, chips as chips_mod, data, projection, squad as squad_mod
 from .rules import Rules
 
 
@@ -147,31 +147,6 @@ def squad_from_team_id(team_id: int, ctx: Context) -> squad_mod.Squad:
                            captain=captain, vice_captain=vice)
 
 
-#: Chip names as the API spells them, and as a person does.
-CHIP_NAMES = {
-    "wildcard": "Wildcard",
-    "freehit": "Free Hit",
-    "bboost": "Bench Boost",
-    "3xc": "Triple Captain",
-    "manager": "Assistant Manager",
-}
-
-
-def chips_used(hist: dict | None) -> list[dict]:
-    """Chips already spent, so the report can say what is left.
-
-    Only the wildcard affects the advice, but a manager who has spent Triple
-    Captain wants to be told that rather than reminded of it in April.
-    """
-    if not hist:
-        return []
-    return [
-        {"name": CHIP_NAMES.get(c["name"], c["name"]), "raw": c["name"],
-         "gameweek": c["event"]}
-        for c in sorted(hist.get("chips", []), key=lambda c: c["event"])
-    ]
-
-
 def advise(sq: squad_mod.Squad, ctx: Context, max_transfers: int = 3,
            hist: dict | None = None, team_id: int | None = None) -> dict:
     """The whole report, as plain data."""
@@ -191,6 +166,22 @@ def advise(sq: squad_mod.Squad, ctx: Context, max_transfers: int = 3,
         available, reason = advice.wildcard_available(ctx.bootstrap, hist, ctx.next_gw)
     wc = advice.wildcard_verdict(sq, ctx.projections, ctx.players, ctx.rules,
                                  ctx.horizon, chosen, available, reason)
+
+    # The chips you still hold, and what each is worth in each gameweek of the
+    # horizon. The wildcard keeps its own richer verdict above; the other three
+    # are valued here.
+    inventory = chips_mod.inventory(ctx.bootstrap, hist, ctx.next_gw)
+    chips_mod.value_chips(inventory, sq.player_ids, ctx.projections, ctx.players,
+                          ctx.rules, ctx.horizon, sq.budget(ctx.players))
+    for chip in inventory:
+        if chip.code == "wildcard" and chip.playable:
+            chip.value = wc.gain_over_plan
+            chip.recommend = wc.recommend
+            chip.note = (
+                f"A rebuild is worth {wc.gain_over_plan:+.1f} points over the "
+                f"horizon against the transfers above, for "
+                f"{wc.transfers_needed} changes."
+            )
 
     after = list(sq.player_ids)
     for m in chosen.moves:
@@ -218,14 +209,23 @@ def advise(sq: squad_mod.Squad, ctx: Context, max_transfers: int = 3,
         "horizon": ctx.horizon,
         "free_transfers": sq.free_transfers,
         "bank": sq.bank,
-        "chips_used": chips_used(hist),
+        # Kept for the briefing and the transfers caption, both of which want
+        # only the spent ones. Derived from the inventory so there is a single
+        # source for chip names and gameweeks rather than two that can drift.
+        "chips_used": [
+            {"name": c.name, "raw": c.code, "gameweek": c.used_in}
+            for c in inventory if c.used_in is not None
+        ],
+        "chips": [c.as_dict() for c in inventory],
+        "chips_summary": chips_mod.summary(inventory),
+        "doubles_next_gw": chips_mod.doubles(sq.player_ids, ctx.projections, ctx.next_gw),
         "current_captain": _player_row(sq.captain, ctx) if sq.captain in ctx.players else None,
         "current_vice_captain": (_player_row(sq.vice_captain, ctx)
                                  if sq.vice_captain in ctx.players else None),
         "squad": [_player_row(pid, ctx) for pid in sq.player_ids],
         "plans": [p.as_dict(ctx.players) for p in plans],
         "recommended": chosen.as_dict(ctx.players),
-        "eleven_current": _eleven_dict(before, ctx, sq.player_ids),
+        "eleven_current": _eleven_dict(before, ctx),
         "eleven": {
             "formation": eleven.formation,
             "expected_points": eleven.expected_points,
@@ -250,7 +250,7 @@ def advise(sq: squad_mod.Squad, ctx: Context, max_transfers: int = 3,
     }
 
 
-def _eleven_dict(eleven, ctx: Context, squad_ids: list[int]) -> dict:
+def _eleven_dict(eleven, ctx: Context) -> dict:
     """One chosen eleven as plain data, for the before-and-after comparison."""
     return {
         "formation": eleven.formation,

@@ -82,16 +82,3 @@ class Rules:
 def money(tenths: int) -> str:
     """Prices are stored in tenths of a million. Show them the way the game does."""
     return f"£{tenths / 10:.1f}m"
-
-
-def selling_price(bought_for: int, now_cost: int, fee: float = 0.5) -> int:
-    """What you actually receive for a player, in tenths.
-
-    You keep the whole of any loss and half of any *profit*, rounded down to
-    the nearest £0.1m — which is why a player who has risen £0.3m sells for
-    £0.1m more than you paid, not £0.3m. A rise of £0.1m returns nothing extra.
-    """
-    if now_cost <= bought_for:
-        return now_cost
-    profit = now_cost - bought_for
-    return bought_for + int(profit * (1 - fee))

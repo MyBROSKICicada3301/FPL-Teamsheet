@@ -54,6 +54,7 @@ ERROR_CODES = {
     "coach_upstream_error": (502, "Gemini returned an error."),
     "coach_unreachable":    (504, "Could not reach Gemini."),
     "coach_empty":          (502, "Gemini returned no usable text."),
+    "coach_truncated":      (502, "Gemini stopped before finishing the briefing."),
     "internal_error":       (500, "Something broke on this side."),
 }
 
@@ -97,6 +98,7 @@ def context(horizon: int) -> engine.Context:
 
 
 def invalidate() -> None:
+    """Drop the built contexts so the next request rebuilds from fresh data."""
     _ctx_cache.clear()
 
 
@@ -139,6 +141,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if route == "/api/healthz":
                 return self._healthz()
+            if route == "/api/health":
+                return self._health()
             if route == "/api/gameweek":
                 return self._gameweek(query)
             if route == "/api/players":
@@ -160,7 +164,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):                           # noqa: N802
         url = urlparse(self.path)
-        if url.path.rstrip("/") != "/api/advice":
+        route = url.path.rstrip("/")
+
+        if route == "/api/refresh":
+            return self._refresh()
+        if route != "/api/advice":
             return self._fail("not_found", f"No route {url.path}.")
 
         try:
@@ -207,6 +215,69 @@ class Handler(BaseHTTPRequestHandler):
             "gameweek": ctx.next_gw,
             "deadline": ctx.deadline,
             "players": len(ctx.players),
+        })
+
+    def _health(self):
+        """The detailed view: what is loaded, how stale it is, what is configured.
+
+        Separate from /api/healthz on purpose. That one is a liveness probe
+        that must answer instantly and never block, which means it cannot say
+        anything about cache age or upstream reachability. This one can do a
+        little work, because nothing depends on it to decide whether the
+        process is alive.
+        """
+        import time
+
+        ctx = peek(advice.DEFAULT_HORIZON)
+        now = time.time()
+
+        cached = []
+        if data.CACHE_DIR.exists():
+            for f in sorted(data.CACHE_DIR.glob("*.json")):
+                age = now - f.stat().st_mtime
+                # Each endpoint has its own TTL: the player list is held for an
+                # hour, anything manager-specific for two minutes. Judging them
+                # all by the default marks a perfectly fresh bootstrap as stale.
+                ttl = data.ttl_for(f.stem)
+                cached.append({
+                    "endpoint": f.stem,
+                    "age_seconds": int(age),
+                    "ttl_seconds": ttl,
+                    "stale": age > ttl,
+                    "bytes": f.stat().st_size,
+                })
+
+        deadline_in = None
+        if ctx and ctx.deadline:
+            import datetime as dt
+
+            when = dt.datetime.fromisoformat(ctx.deadline.replace("Z", "+00:00"))
+            deadline_in = int((when - dt.datetime.now(dt.timezone.utc)).total_seconds())
+
+        return self._send(200, {
+            "status": "ok" if ctx else "starting",
+            "gameweek": ctx.next_gw if ctx else None,
+            "deadline": ctx.deadline if ctx else None,
+            "seconds_to_deadline": deadline_in,
+            "deadline_passed": deadline_in is not None and deadline_in <= 0,
+            "players_loaded": len(ctx.players) if ctx else 0,
+            "horizons_built": sorted(_ctx_cache),
+            "feature": {
+                "default_horizon": advice.DEFAULT_HORIZON,
+                "points_per_extra_transfer": advice.POINTS_PER_EXTRA_TRANSFER,
+                "hit_margin": advice.HIT_MARGIN,
+                "bench_weight": squad_mod.BENCH_WEIGHT,
+            },
+            "coach": {
+                "available": bool(os.environ.get("GEMINI_API_KEY", "").strip()),
+                "model": coach.MODEL,
+            },
+            "cache": {
+                "directory": str(data.CACHE_DIR),
+                "entries": len(cached),
+                "oldest_seconds": max((c["age_seconds"] for c in cached), default=None),
+                "endpoints": cached,
+            },
         })
 
     def _gameweek(self, query):
@@ -257,7 +328,7 @@ class Handler(BaseHTTPRequestHandler):
         if not re.fullmatch(r"\d{1,12}", raw):
             return self._fail(
                 "invalid_team_id",
-                "Pass ?team= with your FPL team id — the number in the URL when "
+                "Pass ?team= with your FPL team id, the number in the URL when "
                 "you view your team on the FPL site.",
             )
 
@@ -272,6 +343,22 @@ class Handler(BaseHTTPRequestHandler):
 
         result = engine.advise(sq, ctx, self._max_transfers(query), hist, team_id)
         return self._send(200, result, cache=60)
+
+    def _refresh(self):
+        """Throw away every cached response and rebuild.
+
+        The page has a Refresh data button, and until this existed it only
+        re-ran the advice against the same hour-old cache, which is not what
+        the label promises. Prices settle overnight and squads change up to the
+        deadline, so a manager pressing refresh wants the upstream read again.
+        """
+        files = data.clear_cache()
+        invalidate()
+        # Start the rebuild rather than leaving it for whoever asks next. It
+        # also makes /api/healthz honest: without this it would report
+        # "starting" while nothing was actually loading.
+        _preload_async()
+        return self._send(200, {"cleared": files, "status": "refreshed"})
 
     def _coach_get(self, query):
         """The written briefing, generated on demand rather than with the advice.
@@ -390,6 +477,26 @@ class Handler(BaseHTTPRequestHandler):
             return 3
 
 
+def _preload_async() -> None:
+    """Build the default context in the background.
+
+    Startup used to do this before `serve_forever()`. The socket was already
+    bound, so clients could connect and then wait a full minute for a thread
+    that did not exist yet. Loading behind the server means it answers from the
+    first instant, with /api/healthz reporting "starting" until this finishes.
+    """
+    def run():
+        try:
+            ctx = context(advice.DEFAULT_HORIZON)
+            print(f"  ready, gameweek {ctx.next_gw}, deadline {ctx.deadline}",
+                  flush=True)
+        except data.FPLError as e:
+            print(f"  warning: could not preload ({e}); will retry per request",
+                  flush=True)
+
+    threading.Thread(target=run, name="preload", daemon=True).start()
+
+
 class Server(ThreadingHTTPServer):
     """ThreadingHTTPServer with a deeper backlog and quieter disconnects."""
 
@@ -432,24 +539,7 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
 
     print(f"FPL Assistant on http://{host}:{port}", flush=True)
 
-    def preload():
-        """Build the projections behind the server rather than in front of it.
-
-        This used to run before `serve_forever()`. The socket was already
-        bound, so clients could connect and then wait a full minute for a
-        thread that did not exist yet. Loading in the background means the
-        server answers from the first instant, and /api/healthz says
-        "starting" until this finishes.
-        """
-        try:
-            ctx = context(advice.DEFAULT_HORIZON)
-            print(f"  ready, gameweek {ctx.next_gw}, deadline {ctx.deadline}",
-                  flush=True)
-        except data.FPLError as e:
-            print(f"  warning: could not preload ({e}); will retry per request",
-                  flush=True)
-
-    threading.Thread(target=preload, name="preload", daemon=True).start()
+    _preload_async()
 
     try:
         httpd.serve_forever()

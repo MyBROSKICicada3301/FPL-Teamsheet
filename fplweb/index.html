@@ -14,6 +14,7 @@
     <span class="muted">Gameweek planner</span>
   </div>
   <div style="display:flex; gap:8px">
+    <a class="btn btn-secondary" href="/method.html">How it is calculated</a>
     <button class="btn btn-secondary" id="refresh" type="button">Refresh data</button>
   </div>
 </div>
@@ -64,6 +65,9 @@
           <span>Free transfers</span>
           <select class="input input--sm" id="free">
             <option value="">Auto</option>
+            <!-- 0 is reachable: a manager who has already transferred this
+                 gameweek has none left, and the service accepts it. -->
+            <option>0</option>
             <option>1</option><option>2</option><option>3</option>
             <option>4</option><option>5</option>
           </select>
@@ -103,9 +107,10 @@
         <div>
           <h2>Every option</h2>
           <p class="muted" style="font-size:12px; margin:6px 0 16px; max-width:46ch">
-            Gross points gained over the horizon, less
-            <span id="hit-cost">4</span> points for each transfer beyond your
-            free ones. The best net figure is the recommendation.
+            <code>net = points gained over the horizon &minus;
+            <span id="hit-cost">4</span> x transfers beyond your free ones</code>.
+            The best net figure is the recommendation, and a hit must beat the
+            best free plan by 2 points before it is taken.
           </p>
           <div class="scroll">
             <table id="options">
@@ -165,6 +170,19 @@
     </section>
 
     <section>
+      <h2>Chips</h2>
+      <p class="muted" id="chips-hint" style="font-size:12px; margin:6px 0 6px; max-width:62ch"></p>
+      <p class="muted formula-note" style="font-size:12px; margin:0 0 16px; max-width:62ch">
+        Each value is the <b>extra projected points the chip would earn if played
+        in this gameweek</b>. Triple Captain is the captain's xP again, Bench
+        Boost the four bench players' xP, Free Hit the best possible eleven less
+        your own. Wildcard is measured over the whole horizon instead.
+        <a href="/method.html#chips">How it is calculated</a>.
+      </p>
+      <div class="chips" id="chips"></div>
+    </section>
+
+    <section>
       <div class="cols cols--2">
         <div>
           <h2>Wildcard</h2>
@@ -188,7 +206,31 @@
       <code>ep_next</code> for the immediate gameweek. They are estimates, not
       forecasts.</p>
     <p>Data from the public Fantasy Premier League API. Not affiliated with or
-      endorsed by the Premier League.</p>
+      endorsed by the Premier League. <a href="/method.html">How calculations are
+      made</a> · <a href="/api/health">Service health</a></p>
+    <p class="byline">
+      Built by <b>Shishir S Nambiar</b>
+      <a class="byline__link" href="https://github.com/MyBROSKICicada3301"
+         target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+            0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01
+            1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
+            0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0
+            1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87
+            3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8
+            c0-4.42-3.58-8-8-8Z"/>
+        </svg>GitHub</a>
+      <a class="byline__link" href="https://www.linkedin.com/in/shishir-s-nambiar"
+         target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M13.63 13.63h-2.37V9.9c0-.89-.02-2.03-1.24-2.03-1.24
+            0-1.43.97-1.43 1.97v3.79H6.22V6h2.28v1.04h.03c.32-.6 1.09-1.24 2.25-1.24 2.4 0 2.85 1.58
+            2.85 3.64v4.19ZM3.55 4.96a1.38 1.38 0 1 1 0-2.76 1.38 1.38 0 0 1 0 2.76Zm1.19 8.67H2.36V6h2.38v7.63Z
+            M14.82 0H1.18C.53 0 0 .52 0 1.16v13.68C0 15.48.53 16 1.18 16h13.64c.65 0 1.18-.52
+            1.18-1.16V1.16C16 .52 15.47 0 14.82 0Z"/>
+        </svg>LinkedIn</a>
+    </p>
   </footer>
 </main>
 

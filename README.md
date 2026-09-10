@@ -104,6 +104,39 @@ It has to win by 8 points before the recommendation flips, because the chip is
 a one-shot resource and a marginal gain is not a reason to burn it. Whether you
 still *have* it is read from your history against the two published windows.
 
+## How calculations are made
+
+The page at `/method.html` sets out the whole method, with the formulas. The
+short version:
+
+```
+xP          = P(appears) x appearance points
+            + expected goals x points per goal for the position
+            + expected assists x 3
+            + P(clean sheet) x clean sheet points for the position
+            + saves / 3                        (goalkeepers)
+            - expected goals conceded / 2      (goalkeepers and defenders)
+            + expected bonus
+            + P(defensive contribution) x 2
+
+squad score = sum over each gameweek in the horizon of
+              ( best eleven's xP + the captain's xP again + 0.12 x bench xP )
+
+net         = points gained over the horizon
+            - 4 x (transfers beyond your free ones)
+```
+
+**A squad score covers the whole horizon, not one gameweek**, counts the
+captain twice, and carries a 0.12 bench weight, which is why 310 is roughly 78
+a gameweek rather than 310 in a week. The bench weight exists so the optimiser
+cannot fill four bench slots with players who never play and call it efficient.
+
+Chip values are the extra points the chip would earn *this* gameweek: Triple
+Captain is the captain's xP again, Bench Boost the four bench projections, Free
+Hit the best possible eleven that week less your own. The wildcard is measured
+over the whole horizon instead, against the best ordinary transfer plan rather
+than against standing still.
+
 ## Where the numbers come from
 
 Expected points per player per gameweek, from the terms of the actual scoring
@@ -164,7 +197,9 @@ The page is a client of a small local service; the same endpoints are yours.
 
 | Route | Returns |
 |---|---|
-| `GET /api/healthz` | up, current gameweek, whether upstream is reachable |
+| `GET /api/healthz` | liveness probe: answers instantly, never blocks, never waits on a build |
+| `GET /api/health` | the detailed view: cache freshness per endpoint, horizons built, the constants the scores were produced with |
+| `POST /api/refresh` | drop every cached upstream response and rebuild |
 | `GET /api/gameweek` | next gameweek, deadline, horizon, the rule constants, whether the briefing is configured |
 | `GET /api/coach?team=&horizon=` | the written briefing, generated on demand |
 | `GET /api/players?search=&limit=` | name search, best projected first |
@@ -203,7 +238,10 @@ fpl/
   coach.py           the written briefing, grounded in the figures
   cli.py             terminal front end
   server.py          HTTP service + static files
-fplweb/              the page
+fplweb/
+  index.html         the planner
+  method.html        how calculations are made
+  fonts/             Archivo, served locally so the page needs no network
 .cache/fpl/          cached API responses (gitignored)
 ```
 

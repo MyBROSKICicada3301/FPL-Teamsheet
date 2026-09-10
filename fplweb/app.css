@@ -342,3 +342,97 @@ tr.pick td { border-bottom-color: var(--color-accent); }
 .lineup__mark--in { background: var(--color-accent); color: #fff; }
 .lineup__mark--cap { background: var(--color-neutral-700); color: var(--color-bg); }
 .lineup__sub { font-size: 11px; letter-spacing: 0.08em; color: var(--color-neutral-700); text-transform: uppercase; margin: 12px 0 4px; }
+
+/* ------------------------------------------------------------------ chips */
+
+/* Four one-shot resources, shown as a row of equals. A spent chip is not
+   hidden: knowing Triple Captain is gone is as useful as knowing Bench Boost
+   is not, and hiding it would leave the reader counting. */
+.chips { display: grid; gap: 0; grid-template-columns: minmax(0, 1fr); border: 2px solid var(--color-text); }
+@media (min-width: 720px) { .chips { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .chips { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.chip { padding: 14px 16px 16px; border-top: 2px solid var(--color-text); }
+.chip:first-child { border-top: 0; }
+@media (min-width: 720px) {
+  .chip { border-top: 2px solid var(--color-text); }
+  .chip:nth-child(-n+2) { border-top: 0; }
+  .chip:nth-child(2n) { border-left: 2px solid var(--color-text); }
+}
+@media (min-width: 1100px) {
+  .chip { border-top: 0; border-left: 2px solid var(--color-text); }
+  .chip:first-child { border-left: 0; }
+}
+
+.chip--spent { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+.chip--play { background: var(--color-accent-100); }
+.chip__name { font-family: var(--font-heading); font-weight: 900; font-stretch: 72%; font-size: 19px; text-transform: uppercase; line-height: 1; }
+.chip__state { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; padding: 2px 6px; text-transform: uppercase; }
+.chip__state--play { background: var(--color-accent); color: #fff; }
+.chip__state--hold { background: var(--color-neutral-300); color: var(--color-text); }
+.chip__state--spent { background: var(--color-text); color: var(--color-bg); }
+.chip__value { display: flex; align-items: baseline; gap: 6px; margin: 10px 0 8px; }
+.chip__value .fig { font-size: 30px; }
+.chip__value span:last-child { font-size: 10px; letter-spacing: 0.1em; color: var(--color-neutral-700); }
+.chip__note { font-size: 12px; color: var(--color-neutral-700); margin: 0; }
+.chip__blurb { font-size: 11px; color: var(--color-neutral-700); margin: 4px 0 0; }
+
+/* Value across the horizon, so a better week ahead is visible rather than
+   asserted. Bars are labelled with their gameweek and carry the figure. */
+.spark { display: flex; gap: 3px; align-items: flex-end; height: 34px; margin: 10px 0 8px; }
+.spark__bar { flex: 1; background: var(--color-neutral-400); position: relative; min-height: 2px; }
+.spark__bar--peak { background: var(--color-accent); }
+.spark__bar--now { outline: 2px solid var(--color-text); outline-offset: 1px; }
+.spark__labels { display: flex; gap: 3px; font-size: 9px; letter-spacing: 0.06em; color: var(--color-neutral-700); }
+.spark__labels span { flex: 1; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* -------------------------------------------------------------- method page */
+
+/* Prose set wider and looser than the planner, which is all tables. The
+   formulas are the point of the page, so they are given room and a rule
+   rather than being tucked into the running text. */
+.prose section { padding: 32px 0; }
+.prose p { max-width: 68ch; margin: 0 0 14px; line-height: 1.62; }
+.prose .lead { font-size: 18px; }
+.prose .note { font-size: 12px; margin-top: 8px; max-width: 34ch; }
+.prose h3.sub {
+  font-family: var(--font-heading); font-weight: 800; font-stretch: 80%;
+  font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em;
+  margin: 24px 0 8px;
+}
+.prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em; background: var(--color-surface); padding: 1px 4px;
+}
+.formula {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; line-height: 1.55; margin: 0 0 16px;
+  padding: 14px 16px; background: var(--color-neutral-100);
+  border-left: 4px solid var(--color-accent); overflow-x: auto;
+  white-space: pre;
+}
+
+/* A caption that explains a figure rather than decorating it. Ruled off so it
+   reads as apparatus, not as more prose. */
+.formula-note { border-left: 3px solid var(--color-neutral-400); padding-left: 10px; }
+.formula-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+a { color: var(--color-accent-700); }
+a:hover { color: var(--color-accent); }
+
+/* ----------------------------------------------------------------- byline */
+
+/* Plain links with inline marks. No GitHub or LinkedIn embed widget: those
+   pull scripts from their own servers, which would break the page's
+   offline-first design and report every visit to a third party. */
+.byline { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+          margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-neutral-300); }
+.byline b { font-family: var(--font-heading); font-weight: 800; font-stretch: 80%;
+            text-transform: uppercase; letter-spacing: 0.04em; }
+/* Padded to clear the 24px minimum target size (WCAG 2.5.8). At the footer's
+   12px type the link box is only 19px tall on its own, which is a poor tap
+   target on a phone, and this footer is read on phones. */
+.byline__link { display: inline-flex; align-items: center; gap: 6px;
+                text-decoration: none; font-weight: 600;
+                padding: 8px 2px; min-height: 24px; }
+.byline__link:hover { text-decoration: underline; }
+.byline__link svg { display: block; }

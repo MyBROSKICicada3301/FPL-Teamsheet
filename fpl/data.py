@@ -51,7 +51,8 @@ class FPLError(RuntimeError):
         self.code = code
 
 
-def _ttl_for(path: str) -> int:
+def ttl_for(path: str) -> int:
+    """How long a response for this endpoint stays fresh, in seconds."""
     for key, seconds in TTL.items():
         if key != "default" and path.startswith(key):
             return seconds
@@ -66,7 +67,7 @@ def _cache_path(path: str) -> Path:
 def get(path: str, max_age: int | None = None) -> dict | list:
     """GET one endpoint, from the cache when it is fresh enough."""
     cached = _cache_path(path)
-    ttl = _ttl_for(path) if max_age is None else max_age
+    ttl = ttl_for(path) if max_age is None else max_age
 
     if cached.exists() and time.time() - cached.stat().st_mtime < ttl:
         try:

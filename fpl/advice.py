@@ -93,7 +93,7 @@ def _club_counts(ids, players) -> dict[int, int]:
     return counts
 
 
-def _pool(projections, horizon, players, owned: set[int]) -> dict[int, list[int]]:
+def _pool(projections, horizon, owned: set[int]) -> dict[int, list[int]]:
     """Candidate signings per position, best first, unavailable players dropped."""
     by_pos: dict[int, list[int]] = {1: [], 2: [], 3: [], 4: []}
     for pid, proj in projections.items():
@@ -140,7 +140,7 @@ def find_transfers(squad: Squad, projections: dict, players: dict, rules: Rules,
 
     for _ in range(max_transfers):
         owned = set(current)
-        pool = _pool(projections, horizon, players, owned)
+        pool = _pool(projections, horizon, owned)
         counts = _club_counts(current, players)
 
         shortlist: list[tuple[float, int, int, int]] = []

@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How calculations are made, FPL Assistant</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex; align-items:baseline; gap:12px">
+    <span class="brand">FPL Assistant</span>
+    <span class="muted">How calculations are made</span>
+  </div>
+  <div style="display:flex; gap:8px">
+    <a class="btn btn-secondary" href="/">Back to the planner</a>
+  </div>
+</div>
+
+<main class="pad prose">
+
+  <section>
+    <div class="split">
+      <div><h6>In one line</h6></div>
+      <div>
+        <p class="lead">Every number on this site is a projection of points, and
+          every recommendation is the same comparison: what does this change buy
+          me over the next few gameweeks, and what does it cost.</p>
+        <p>Nothing here is a forecast of what will happen. A projection is the
+          mean of a wide distribution, and a real gameweek lands somewhere in
+          that distribution rather than on the mean. The page is worth using to
+          rank options against each other, not to predict a score.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="split">
+      <div>
+        <h6 id="xp">Expected points</h6>
+        <p class="muted note">Per player, per gameweek. Written out of the
+          actual scoring rules rather than fitted as a black box.</p>
+      </div>
+      <div>
+        <pre class="formula">xP = P(appears)          x appearance points
+   + expected goals      x points per goal for the position
+   + expected assists    x 3
+   + P(clean sheet)      x clean sheet points for the position
+   + saves / 3                        (goalkeepers)
+   - expected goals conceded / 2      (goalkeepers and defenders)
+   + expected bonus
+   + P(defensive contribution) x 2</pre>
+        <p>Each rate comes from that player's own per-90 statistics this season,
+          then three things are done to it.</p>
+
+        <h3 class="sub">Thin samples are pulled towards a price-conditional prior</h3>
+        <p>Three games of football is not enough evidence to trust a rate. A
+          striker with one goal from a single substitute appearance reads as a
+          1.0 expected-goals-per-90 player, and a model that believes him will
+          recommend him.</p>
+        <p>So each rate is blended with a prior, weighted by minutes played:</p>
+        <pre class="formula">used = w x (player's own rate) + (1 - w) x prior
+w    = minutes / (minutes + 270)</pre>
+        <p>At 270 minutes, three full matches, the two weigh equally. By a full
+          season the prior is almost irrelevant.</p>
+        <p><b>The prior is conditioned on price, not on position.</b> Shrinking
+          everyone towards "an average forward" is a systematic penalty on
+          exactly the players people captain, because it pulls a genuine outlier
+          towards a number already known to be false about him. Within each
+          position the rate is regressed on cost, so a 15.5m forward is compared
+          against what 15.5m forwards do. Price is FPL's own encoding of
+          expectation, set from last season before a ball was kicked this one.</p>
+
+        <h3 class="sub">Fixtures scale the output</h3>
+        <p>FPL publishes a difficulty rating from 1 to 5 for every fixture.
+          Attacking output, clean-sheet probability and goals conceded are each
+          scaled by it, with a small home adjustment. A blank gameweek is an
+          empty fixture list and scores zero; a double is two fixtures and the
+          terms simply add, which is the whole reason doubles are worth planning
+          around.</p>
+
+        <h3 class="sub">The immediate gameweek is blended with FPL's own estimate</h3>
+        <p>FPL publishes <code>ep_next</code>, its own expected points for the
+          coming gameweek. For that one gameweek the two are blended 65 to 35 in
+          favour of this model. Two mediocre estimates of the same quantity beat
+          either alone, and FPL's sees team news this model cannot.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="split">
+      <div>
+        <h6 id="squad">What a squad is worth</h6>
+        <p class="muted note">This is the number behind the wildcard panel, and
+          the one most often misread.</p>
+      </div>
+      <div>
+        <pre class="formula">squad score = sum over each gameweek in the horizon of
+                ( best starting eleven's xP
+                + the captain's xP again
+                + 0.12 x the bench's xP )</pre>
+        <p>Three things follow from that, and they explain why the figure is
+          larger than a gameweek score.</p>
+        <p><b>It covers the whole horizon, four gameweeks by default.</b> A
+          squad score near 310 is roughly 78 per gameweek, not 310 in a week.</p>
+        <p><b>The captain is counted twice</b>, because the armband doubles
+          those points. An eleven projected at 68.6 becomes 76.6 once the
+          captain is added again.</p>
+        <p><b>The bench is weighted at 0.12</b>, neither zero nor one. At zero
+          the optimiser fills all four bench slots with the cheapest players in
+          the game, since they never score, and calls that efficient. The weight
+          adds roughly 2 points per gameweek to every squad, so it barely moves
+          comparisons, but it does inflate the absolute figure.</p>
+        <p>All three figures on the wildcard panel come from this one function
+          applied to three different squads, which is what makes the difference
+          between them a fair comparison even though the absolute level is
+          model-specific.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="split">
+      <div>
+        <h6 id="transfers">Transfers and the points hit</h6>
+        <p class="muted note">Where most of the disagreement with a gut call
+          comes from.</p>
+      </div>
+      <div>
+        <pre class="formula">net = points gained over the horizon
+    - 4 x (transfers beyond your free ones)</pre>
+        <p><b>A hit is judged over four gameweeks, not one.</b> Over a single
+          gameweek almost no hit ever pays; over a season almost every hit does.
+          Four gameweeks is roughly how long a transfer's edge survives before
+          form, fixtures and prices move on.</p>
+        <p><b>A move is scored on what it does to your squad, not to the player
+          slot.</b> Upgrading a bench goalkeeper looks like a large gain on raw
+          projections and is worth almost nothing in points. Candidates are
+          shortlisted on the raw difference, then rescored by rebuilding the
+          eleven around the change.</p>
+        <p><b>A hit must clear the best free plan by 2 points before it is
+          recommended.</b> The hit is a certain loss bought with an estimated
+          gain, and the estimate is nowhere near precise enough to justify the
+          trade on a hair. Without this the tool once recommended paying 4
+          certain points for an edge of 0.08.</p>
+        <p>Free transfers roll over up to five, so an unused one is not wasted
+          and "roll it" is a real recommendation.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="split">
+      <div>
+        <h6 id="chips">Chips</h6>
+        <p class="muted note">What each is worth is arithmetic. Whether to play
+          it is a judgement, and the difference is stated.</p>
+      </div>
+      <div>
+        <pre class="formula">Triple Captain  = the captain's xP        (a third copy)
+Bench Boost     = the four bench players' xP
+Free Hit        = best possible eleven that week, less your own
+Wildcard        = squad score of an optimal rebuild, against the
+                  best ordinary plan rather than against standing still</pre>
+        <p>The wildcard is compared against the best transfer plan, not against
+          doing nothing. Almost any wildcard beats doing nothing; the question is
+          whether it beats what free transfers and a sensible hit would have
+          achieved anyway. It has to win by 8 points before the recommendation
+          flips, because the chip is a one-shot resource.</p>
+        <p>The other three are valued in <b>every gameweek of the horizon</b>,
+          and are only suggested when this gameweek is the best in view and the
+          value clears a floor. That is why a chip worth 13 points now can still
+          come back as "hold": if it is worth 15 in two weeks, the sparkline
+          shows you.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="split">
+      <div>
+        <h6>What this cannot see</h6>
+        <p class="muted note">The limits are part of the method, not a footnote
+          to it.</p>
+      </div>
+      <div>
+        <p><b>Team news beyond the flags.</b> A fit player who has quietly lost
+          his place still projects as a starter until the minutes data catches
+          up. Press conferences, tactical shifts and late fitness tests are
+          invisible.</p>
+        <p><b>Anything beyond the horizon.</b> Chip values cover the gameweeks in
+          view and no further. Double gameweeks are announced when cup fixtures
+          are rearranged, often long before the schedule this reads reflects
+          them, so a better week later cannot be ruled out.</p>
+        <p><b>Your purchase prices.</b> Selling price is taken as the current
+          price. FPL only exposes true selling prices to the logged-in manager,
+          so a squad sitting on price rises has slightly more money than this
+          assumes.</p>
+        <p><b>Interactions between features.</b> The projection adds independent
+          terms. It does not know that a cheap defender in a good defence and a
+          good fixture is worth more than the two effects separately.</p>
+        <p>Nothing here is betting advice, and none of it should be read as
+          certainty.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="split">
+      <div><h6>Where the data comes from</h6></div>
+      <div>
+        <p>The public Fantasy Premier League API, unauthenticated. Player rates,
+          prices, ownership, availability and club news from
+          <code>bootstrap-static</code>; opponent, venue and difficulty from
+          <code>fixtures</code>; your squad, bank and chip history from the
+          <code>entry</code> endpoints. Squad size, the three-per-club cap, the
+          budget, the sell-on fee and both wildcard windows are read from the
+          live game configuration rather than typed in, so they cannot drift out
+          of date here without drifting in the real game.</p>
+        <p>Responses are cached on disk, an hour for the player list and
+          fixtures and two minutes for anything manager-specific. Current
+          freshness is at <a href="/api/health"><code>/api/health</code></a>.</p>
+        <p>Not affiliated with or endorsed by the Premier League.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p>Not affiliated with or endorsed by the Premier League.
+      <a href="/">Back to the planner</a> · <a href="/api/health">Service health</a></p>
+    <p class="byline">
+      Built by <b>Shishir S Nambiar</b>
+      <a class="byline__link" href="https://github.com/MyBROSKICicada3301"
+         target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+            0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01
+            1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
+            0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0
+            1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87
+            3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8
+            c0-4.42-3.58-8-8-8Z"/>
+        </svg>GitHub</a>
+      <a class="byline__link" href="https://www.linkedin.com/in/shishir-s-nambiar"
+         target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M13.63 13.63h-2.37V9.9c0-.89-.02-2.03-1.24-2.03-1.24
+            0-1.43.97-1.43 1.97v3.79H6.22V6h2.28v1.04h.03c.32-.6 1.09-1.24 2.25-1.24 2.4 0 2.85 1.58
+            2.85 3.64v4.19ZM3.55 4.96a1.38 1.38 0 1 1 0-2.76 1.38 1.38 0 0 1 0 2.76Zm1.19 8.67H2.36V6h2.38v7.63Z
+            M14.82 0H1.18C.53 0 0 .52 0 1.16v13.68C0 15.48.53 16 1.18 16h13.64c.65 0 1.18-.52
+            1.18-1.16V1.16C16 .52 15.47 0 14.82 0Z"/>
+        </svg>LinkedIn</a>
+    </p>
+  </footer>
+
+</main>
+</body>
+</html>
