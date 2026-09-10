@@ -4,10 +4,18 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#for-developers)
 
-Tells you what to do before the next Fantasy Premier League deadline: which
-transfers are worth making, who to captain, and whether this is the week to
-spend a chip. It shows the arithmetic behind every call, so you can disagree
-with it.
+What started as a way to beat my friends in our mini-league turned into this.
+
+They pick on gut feeling and whatever the podcasts are talking about that week.
+I wanted something that could answer the only question that actually matters on
+a Friday night: is this transfer worth the four points it costs me?
+
+So FPL Teamsheet reads your squad from the public FPL API, projects every
+player in the game, and tells you which transfers to make, who to captain, and
+whether this is the week to spend a chip. It shows the arithmetic behind every
+call, so you can look at what it rejected and decide it is wrong. Often the
+answer is to do nothing at all, and it will say so rather than invent a move to
+look busy.
 
 **Nothing to install.** No `pip`, no npm, no build step, no API key. If you have
 Python 3.10 or newer and a browser, you have everything.
