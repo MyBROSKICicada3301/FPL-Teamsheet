@@ -20,7 +20,4 @@ server.log
 .env
 .env.*
 !.env.example
-
-# Local Claude Code settings, including the preview launch config. Machine
-# specific, so it is not shared.
 .claude/

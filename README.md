@@ -1,38 +1,20 @@
-# FPL Teamsheet
+# FPL Assistant
 
-[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#for-developers)
-
-What started as a way to beat my friends in our mini-league turned into this.
-
-They pick on gut feeling and whatever the podcasts are talking about that week.
-I wanted something that could answer the only question that actually matters on
-a Friday night: is this transfer worth the four points it costs me?
-
-So FPL Teamsheet reads your squad from the public FPL API, projects every
-player in the game, and tells you which transfers to make, who to captain, and
-whether this is the week to spend a chip. It shows the arithmetic behind every
-call, so you can look at what it rejected and decide it is wrong. Often the
-answer is to do nothing at all, and it will say so rather than invent a move to
-look busy.
+Tells you what to do before the next Fantasy Premier League deadline: which
+transfers are worth making, who to captain, and whether this is the week to
+spend a chip. It shows the arithmetic behind every call, so you can disagree
+with it.
 
 **Nothing to install.** No `pip`, no npm, no build step, no API key. If you have
 Python 3.10 or newer and a browser, you have everything.
-
-Free to use, modify and redistribute under the [MIT licence](LICENSE).
-
-![The planner: recommended transfers with every rejected option beside them, the
-starting eleven compared before and after, all four chips with their value in
-each of the next four gameweeks, and a written briefing that cites its sources](Docs/Sample.png)
 
 ---
 
 ## Try it
 
 ```bash
-git clone https://github.com/MyBROSKICicada3301/fpl-teamsheet.git
-cd fpl-teamsheet
+git clone https://github.com/MyBROSKICicada3301/fpl-assistant.git
+cd fpl-assistant
 ./start.sh
 ```
 
@@ -42,7 +24,7 @@ Stop it with `./stop.sh`.
 
 ### Where do I find my team id?
 
-Log in to the FPL site, click **Pick Team**, and look at the address bar:
+Log in to the FPL site, click **Points**, and look at the address bar:
 
 ```
 https://fantasy.premierleague.com/entry/1234567/event/4
@@ -206,15 +188,6 @@ anything manager-specific, so running this does not hammer somebody else's
 server.
 
 ---
-
-## Licence
-
-[MIT](LICENSE) for the code.
-
-The bundled Archivo font in `fplweb/fonts/` is not covered by that. It is the
-work of the Archivo Project Authors, licensed under the SIL Open Font License
-1.1, whose terms travel with the files: see
-[`fplweb/fonts/OFL.txt`](fplweb/fonts/OFL.txt).
 
 ## Not affiliated
 
