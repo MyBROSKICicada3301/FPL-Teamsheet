@@ -63,8 +63,14 @@
   --color-accent-700: #ae1800;
   --color-accent-800: #7c1405;
 
-  --font-heading: 'Archivo', system-ui, sans-serif;
-  --font-body: 'Archivo', system-ui, sans-serif;
+  /* Emoji faces sit last on purpose. Font matching runs per character, so
+     Archivo still draws every letter and these are consulted only for
+     codepoints nothing earlier in the stack has a glyph for. Naming the three
+     platform emoji fonts means a symbol renders on Windows and macOS too, not
+     just on a Linux box that happens to have Noto Color Emoji installed. */
+  --emoji: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Segoe UI Symbol';
+  --font-heading: 'Archivo', system-ui, sans-serif, var(--emoji);
+  --font-body: 'Archivo', system-ui, sans-serif, var(--emoji);
 
   --space-2: 8px;
   --space-3: 12px;
