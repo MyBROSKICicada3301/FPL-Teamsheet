@@ -14,40 +14,13 @@ Python 3.10 or newer and a browser, you have everything.
 
 ```bash
 git clone https://github.com/MyBROSKICicada3301/fpl-assistant.git
-cd fpl-assistant
+cd fpl-teamsheet
 ./start.sh
 ```
 
 Open <http://127.0.0.1:8765>, put in your team id, press **Get advice**.
 
 Stop it with `./stop.sh`.
-
-### On Windows
-
-`start.sh` needs bash, so Git Bash and WSL work as they do anywhere else.
-From PowerShell or the command prompt, use the scripts written for it:
-
-```powershell
-.\start.ps1
-.\stop.ps1
-```
-
-They take the same port, write the same `.server.pid`, and print the same
-things, so either side can stop a server the other one started. Pick a
-different port with `.\start.ps1 -Port 8766`.
-
-PowerShell declines to run unsigned scripts until you say otherwise. If you
-see *running scripts is disabled on this system*, either allow this one run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1
-```
-
-or allow local scripts for your account, once:
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-```
 
 ### Where do I find my team id?
 
@@ -65,13 +38,6 @@ tables, and nothing about your team is stored by this tool.
 
 ```bash
 python3 -m fpl.cli --team 1234567
-```
-
-On Windows `python3` is a Microsoft Store placeholder, not an interpreter.
-Use the launcher that ships with Python instead:
-
-```bash
-py -3 -m fpl.cli --team 1234567
 ```
 
 ```
