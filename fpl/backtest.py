@@ -45,9 +45,11 @@ from .projection import (
     RECENT_GAMEWEEKS,
     Player,
     Priors,
+    TeamStrength,
     appearances_from_live,
     fixtures_by_team,
     project_one,
+    team_xg_from_live,
 )
 from .rules import POSITION_NAME
 
@@ -270,6 +272,13 @@ def replay(gw: int, history, meta, fixtures_raw) -> Result:
     """Project one gameweek from what came before it, and score the result."""
     players = state_before(gw, history, meta, fixtures_raw)
     priors = Priors(players)
+
+    # Club strength from matches already played, which for gameweek G means
+    # strictly those before it. Rating a fixture using the result of the
+    # fixture would make every number here meaningless.
+    earlier = {g: v for g, v in history.items() if g < gw}
+    team_of = {pid: info["team"] for pid, info in meta.items()}
+    strength = TeamStrength(team_xg_from_live(earlier, fixtures_raw, team_of))
     by_team = fixtures_by_team(fixtures_raw, [gw], skip_finished=False)
     outcome = history.get(gw, {})
 
@@ -287,7 +296,7 @@ def replay(gw: int, history, meta, fixtures_raw) -> Result:
         if stats is None:
             continue
 
-        predicted = project_one(p, fixtures, priors)
+        predicted = project_one(p, fixtures, priors, strength)
         actual = _f(stats.get("total_points"))
 
         everyone.append((predicted, actual))

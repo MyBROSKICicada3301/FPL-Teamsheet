@@ -20,9 +20,15 @@ statistics and scaled by the fixture in front of them:
 Two honest limits. Rate statistics early in a season are noisy — a striker with
 one goal from 90 minutes reads as a 1.0 xG/90 player — so rates are shrunk
 towards the positional average by a prior weighted in minutes, which is what
-stops a single cameo from topping the board. And fixture difficulty is FPL's
-own 1-5 rating, which is a coarse instrument: it knows Arsenal away is hard, it
-does not know their centre-backs are suspended.
+stops a single cameo from topping the board. And a fixture is priced partly by
+FPL's own 1-5 difficulty rating, a coarse instrument that knows Arsenal away is
+hard but not that their centre-backs are suspended.
+
+Once enough matches have been played, that rating is blended with club
+strengths solved from the expected goals actually created and allowed, which
+are continuous and adjusted for who the opponent was. See `TeamStrength`, and
+note that early in a season the published rating is still the better of the
+two — a fact that came out of fpl/backtest.py rather than out of taste.
 
 FPL publishes its own one-gameweek estimate as `ep_next`. Where that exists it
 is blended in, because two mediocre estimates of the same quantity beat either
@@ -75,6 +81,19 @@ RECENT_PRIOR_GAMEWEEKS = 2.0
 #: How many finished gameweeks of per-player history to read. Past six the
 #: half-life has reduced the weight to under a quarter.
 RECENT_GAMEWEEKS = 6
+
+#: Matches of evidence before a club's own rating outweighs the published
+#: difficulty rating. Eight, and chosen from a backtest that did not go the
+#: way this was expected to: five matches into a season, ratings built from
+#: expected goals rank players no better than FPL's own five point scale,
+#: which carries everything the market believed before a ball was kicked.
+#: Eight leaves that prior in charge for now and hands over as the season
+#: supplies the evidence. Re-run fpl/backtest.py in midwinter and move it.
+STRENGTH_PRIOR_MATCHES = 8.0
+
+#: Rounds of opponent adjustment. The fixed point arrives quickly; five is
+#: comfortably past it.
+STRENGTH_ITERATIONS = 5
 
 #: Weight given to FPL's own `ep_next` for the immediate gameweek.
 EP_NEXT_WEIGHT = 0.35
@@ -281,6 +300,172 @@ class Priors:
         return self._means[position][rate]
 
 
+@dataclass
+class Match:
+    """One club's half of a finished fixture, in expected goals."""
+
+    team: int
+    opponent: int
+    xg_for: float
+    xg_against: float
+    home: bool
+
+
+def team_xg_from_live(
+    history: dict[int, dict[int, dict]],
+    fixtures_raw: list,
+    team_of: dict[int, int],
+) -> list[Match]:
+    """Per-club expected goals for and against, from finished gameweeks.
+
+    A club's expected goals are the sum of its players' -- the live feed
+    reports xG per player, and a team's chances are its players' chances.
+    Goals conceded are the opponent's xG in the same fixture rather than the
+    per-player `expected_goals_conceded`, which every outfielder carries a
+    copy of and which would therefore multiply if summed.
+    """
+    scored: dict[tuple[int, int], float] = {}
+    for gw, by_player in history.items():
+        for pid, stats in by_player.items():
+            team = team_of.get(pid)
+            if team is None:
+                continue
+            key = (gw, team)
+            scored[key] = scored.get(key, 0.0) + _f(stats.get("expected_goals"))
+
+    # A club playing twice in one gameweek has both matches summed into one
+    # figure, which cannot be split back apart. Doubles are rare; dropping
+    # them costs a little evidence and avoids inventing the split.
+    appearances: dict[tuple[int, int], int] = {}
+    for fx in fixtures_raw:
+        gw = fx.get("event")
+        if gw is None or not fx.get("finished"):
+            continue
+        for team in (fx["team_h"], fx["team_a"]):
+            appearances[(gw, team)] = appearances.get((gw, team), 0) + 1
+
+    out: list[Match] = []
+    for fx in fixtures_raw:
+        gw = fx.get("event")
+        if gw is None or not fx.get("finished") or gw not in history:
+            continue
+        home, away = fx["team_h"], fx["team_a"]
+        if appearances.get((gw, home), 0) != 1 or appearances.get((gw, away), 0) != 1:
+            continue
+        xg_home = scored.get((gw, home), 0.0)
+        xg_away = scored.get((gw, away), 0.0)
+        out.append(Match(home, away, xg_home, xg_away, True))
+        out.append(Match(away, home, xg_away, xg_home, False))
+    return out
+
+
+class TeamStrength:
+    """How good each club is at scoring and at preventing, from what happened.
+
+    An alternative to FPL's own fixture difficulty rating, which is a five
+    point scale that in practice uses four of its values and spends 45% of
+    them on the neutral 3, where the attacking multiplier is exactly 1.0.
+
+    The ratings are multiplicative against the league average and solved by
+    repeated substitution: a club's attack is what it created divided by what
+    its opponents usually concede, and its defence is what it allowed divided
+    by what its opponents usually create. Five rounds is well past the point
+    where the numbers stop moving.
+
+    It does not replace the published rating, because a backtest said it
+    should not. Five matches in, these ratings rank players no better than
+    the coarse scale they were meant to improve on, that scale carrying
+    everything the market believed before the season started. `confidence`
+    is how the two are weighed against each other, and it grows with the
+    evidence. Ratings here are therefore clamped rather than shrunk: the
+    blend in `project_one` is the single place that prices a thin sample.
+    """
+
+    def __init__(
+        self,
+        matches: list[Match],
+        prior_matches: float = STRENGTH_PRIOR_MATCHES,
+        iterations: int = STRENGTH_ITERATIONS,
+    ):
+        self.attack: dict[int, float] = {}
+        self.defence: dict[int, float] = {}
+        self.played: dict[int, int] = {}
+        self.league_xg = 0.0
+        self.home_factor = 1.0
+        self.prior_matches = prior_matches
+
+        if not matches:
+            return
+
+        self.league_xg = sum(m.xg_for for m in matches) / len(matches)
+        if self.league_xg <= 0:
+            self.league_xg = 0.0
+            return
+
+        home = [m.xg_for for m in matches if m.home]
+        away = [m.xg_for for m in matches if not m.home]
+        if home and away and sum(away) > 0:
+            ratio = (sum(home) / len(home)) / (sum(away) / len(away))
+            # Split the observed home/away gap symmetrically about 1.0, so the
+            # pair multiplies back out to the league average.
+            self.home_factor = max(0.8, min(1.3, math.sqrt(max(0.01, ratio))))
+
+        by_team: dict[int, list[Match]] = {}
+        for m in matches:
+            by_team.setdefault(m.team, []).append(m)
+        self.played = {t: len(ms) for t, ms in by_team.items()}
+
+        attack = {t: 1.0 for t in by_team}
+        defence = {t: 1.0 for t in by_team}
+
+        for _ in range(iterations):
+            next_attack = {}
+            next_defence = {}
+            for t, ms in by_team.items():
+                a_num = a_den = d_num = d_den = 0.0
+                for m in ms:
+                    ha = self.home_factor if m.home else 1.0 / self.home_factor
+                    a_num += m.xg_for
+                    a_den += self.league_xg * defence.get(m.opponent, 1.0) * ha
+                    # The opponent attacks with the opposite venue advantage.
+                    d_num += m.xg_against
+                    d_den += self.league_xg * attack.get(m.opponent, 1.0) / ha
+                next_attack[t] = a_num / a_den if a_den > 0 else 1.0
+                next_defence[t] = d_num / d_den if d_den > 0 else 1.0
+            attack, defence = next_attack, next_defence
+
+        # Clamped rather than shrunk towards the league average. Shrinking
+        # here as well would double up with the blend against the published
+        # difficulty rating in project_one, which is the one place that
+        # decides how much a thin sample is worth.
+        for t in by_team:
+            self.attack[t] = max(0.35, min(2.2, attack[t]))
+            self.defence[t] = max(0.35, min(2.2, defence[t]))
+
+    def knows(self, team: int) -> bool:
+        return team in self.attack and self.league_xg > 0
+
+    def confidence(self, team: int, opponent: int) -> float:
+        """How far these ratings deserve to be trusted, from 0 to 1.
+
+        Two matches of expected goals is not a season. FPL's difficulty
+        rating is a coarse instrument but it encodes what everyone expected
+        before a ball was kicked, and in August that is worth more than the
+        little that has actually happened. This is the weight that decides
+        between them, and it climbs as the evidence does.
+        """
+        seen = min(self.played.get(team, 0), self.played.get(opponent, 0))
+        return seen / (seen + self.prior_matches)
+
+    def expected_goals(self, team: int, opponent: int, home: bool) -> float:
+        """What `team` should score against `opponent`, at this venue."""
+        ha = self.home_factor if home else 1.0 / self.home_factor
+        return (self.league_xg
+                * self.attack.get(team, 1.0)
+                * self.defence.get(opponent, 1.0)
+                * ha)
+
+
 def _shrink(rate: float, prior: float, minutes: float) -> float:
     """Pull a thin sample towards the positional average.
 
@@ -388,12 +573,21 @@ def _expected_bonus(bps90: float, minutes: float) -> float:
     return (minutes / 90.0) * 1.8 * (per90 ** 2) / (per90 ** 2 + 26.0 ** 2)
 
 
-def project_one(p: Player, fixtures: list[Fixture], priors: "Priors") -> float:
+def project_one(
+    p: Player,
+    fixtures: list[Fixture],
+    priors: "Priors",
+    strength: "TeamStrength | None" = None,
+) -> float:
     """Expected points for one player across the fixtures of one gameweek.
 
     A blank gameweek is an empty list and scores zero. A double is two entries
     and the terms simply add, which is the whole reason doubles are worth
     planning around.
+
+    With a `strength` model the fixture is priced in expected goals, which is
+    continuous and opponent-adjusted. Without one it falls back to FPL's five
+    point difficulty rating, so the model still runs on bootstrap alone.
     """
     if not fixtures or p.availability <= 0:
         return 0.0
@@ -417,8 +611,40 @@ def project_one(p: Player, fixtures: list[Fixture], priors: "Priors") -> float:
 
     for fx in fixtures:
         fdr = max(1, min(5, fx.difficulty))
-        # Home advantage, applied on top of a rating that already leans on it.
-        attack = ATTACK_BY_FDR[fdr] * (1.06 if fx.home else 0.94)
+        use_strength = (
+            strength is not None
+            and strength.knows(p.team)
+            and strength.knows(fx.opponent)
+        )
+
+        # What the published difficulty rating expects of this fixture,
+        # in the same units, so the two can be mixed rather than chosen
+        # between. CONCEDED_BY_FDR is already an expected-goals figure.
+        attack_fdr = ATTACK_BY_FDR[fdr] * (1.06 if fx.home else 0.94)
+        conceded_fdr = CONCEDED_BY_FDR[fdr] * max(0.4, leak)
+
+        if use_strength:
+            # How many goals each side should manage in this particular match,
+            # mixed with the pre-season expectation by how much has been seen.
+            w = strength.confidence(p.team, fx.opponent)
+            ours = strength.expected_goals(p.team, fx.opponent, fx.home)
+            theirs = strength.expected_goals(fx.opponent, p.team, not fx.home)
+            attack = w * (ours / strength.league_xg) + (1 - w) * attack_fdr
+            theirs = w * theirs + (1 - w) * conceded_fdr
+            # A clean sheet is the opponent failing to score at all, which for
+            # a Poisson count is simply exp(-mean). No lookup table, and no
+            # separate leakiness term: the opponent's figure already carries
+            # how good this defence is, opponent-adjusted.
+            clean_sheet = math.exp(-theirs)
+            conceded = theirs
+        else:
+            attack = attack_fdr
+            base = CLEAN_SHEET_BY_FDR[fdr] * (1.10 if fx.home else 0.90)
+            # A side that concedes more than the league average keeps fewer
+            # clean sheets than its fixture alone suggests.
+            clean_sheet = base * (2.0 - leak)
+            conceded = conceded_fdr
+
         share = minutes / 90.0
 
         total += p_any * 1.0 + p_60 * 1.0                      # appearance
@@ -427,17 +653,13 @@ def project_one(p: Player, fixtures: list[Fixture], priors: "Priors") -> float:
         total += _expected_bonus(bps90, minutes)
 
         if CLEAN_SHEET_POINTS[p.position]:
-            base = CLEAN_SHEET_BY_FDR[fdr] * (1.10 if fx.home else 0.90)
-            # A side that concedes more than the league average keeps fewer
-            # clean sheets than its fixture alone suggests.
-            p_cs = max(0.02, min(0.75, base * (2.0 - leak)))
+            p_cs = max(0.02, min(0.75, clean_sheet))
             total += p_cs * CLEAN_SHEET_POINTS[p.position] * p_60
 
         if p.position == 1:
             total += (saves90 * share) / 3.0
 
         if p.position in (1, 2):
-            conceded = CONCEDED_BY_FDR[fdr] * max(0.4, leak)
             total -= 0.5 * conceded * p_60
 
         threshold = DEFENSIVE_CONTRIBUTION_THRESHOLD[p.position]
@@ -528,6 +750,7 @@ def build(
     fixtures_raw: list,
     horizon: list[int],
     recent: dict[int, list[Appearance]] | None = None,
+    strength: "TeamStrength | None" = None,
 ) -> dict[int, Projection]:
     """Project every player over each gameweek in `horizon`."""
     teams = {t["id"]: t for t in bootstrap["teams"]}
@@ -546,7 +769,7 @@ def build(
         for gw in horizon:
             fxs = by_team.get((gw, p.team), [])
             proj.fixtures[gw] = fxs
-            value = project_one(p, fxs, priors)
+            value = project_one(p, fxs, priors, strength)
             # FPL's own estimate covers the immediate gameweek only, and it
             # sees team news this model does not.
             if gw == first and p.ep_next > 0 and fxs:

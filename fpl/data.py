@@ -158,15 +158,19 @@ def live(event: int, max_age: int | None = None) -> dict:
     return get(f"event/{event}/live/", max_age=max_age)
 
 
-def recent_live(bootstrap: dict, count: int) -> dict[int, dict[int, dict]]:
-    """Per-player stats for the last `count` finished gameweeks.
+def recent_live(bootstrap: dict, count: int | None = None) -> dict[int, dict[int, dict]]:
+    """Per-player stats for finished gameweeks, most recent `count` of them.
 
-    Keyed by gameweek, then by player id. One request per gameweek, all of
-    them cacheable forever, which is what makes recency affordable at all.
+    Keyed by gameweek, then by player id. `count` of None means every gameweek
+    played so far, which is what the team strength model wants; the minutes
+    model slices a shorter window off the same result rather than fetching
+    twice. One request per gameweek, each cacheable until the heat death of
+    the season, which is what makes any of this affordable.
     """
     finished = sorted(e["id"] for e in bootstrap.get("events", []) if e.get("finished"))
+    wanted = finished if count is None else (finished[-count:] if count > 0 else [])
     out: dict[int, dict[int, dict]] = {}
-    for gw in finished[-count:] if count > 0 else []:
+    for gw in wanted:
         payload = live(gw, max_age=FINISHED_EVENT_TTL)
         elements = payload["elements"] if isinstance(payload, dict) else payload
         out[gw] = {e["id"]: (e.get("stats") or {}) for e in elements}
