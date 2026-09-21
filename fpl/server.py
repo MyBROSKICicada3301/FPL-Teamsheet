@@ -551,8 +551,13 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
 
 if __name__ == "__main__":
     import argparse
+    import sys
 
-    ap = argparse.ArgumentParser(prog="python3 -m fpl.server")
+    # See fpl/cli.py: a hardcoded "python3" names a command that does not
+    # exist on Windows, so the usage line follows the interpreter in hand.
+    exe = os.path.splitext(os.path.basename(sys.executable))[0] or "python3"
+
+    ap = argparse.ArgumentParser(prog=f"{exe} -m fpl.server")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
     args = ap.parse_args()
