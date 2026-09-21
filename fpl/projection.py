@@ -60,6 +60,22 @@ ATTACK_BY_FDR = {1: 1.35, 2: 1.18, 3: 1.0, 4: 0.84, 5: 0.68}
 #: positional average. Three full matches.
 SHRINKAGE_MINUTES = 270.0
 
+#: Half-life, in gameweeks, for how fast an old appearance stops counting.
+#: Season totals say a dropped player is a starter for weeks after he stops
+#: being one, and backtesting showed that is where the projection's optimism
+#: comes from: conditioned on a player actually featuring the model is close
+#: to unbiased, so the error is in predicting whether he features at all.
+MINUTES_HALF_LIFE = 3.0
+
+#: Gameweeks of recent evidence before the window is trusted over the season
+#: total. Two, because three appearances is a thin sample and a rotated player
+#: and a dropped one look identical inside it.
+RECENT_PRIOR_GAMEWEEKS = 2.0
+
+#: How many finished gameweeks of per-player history to read. Past six the
+#: half-life has reduced the weight to under a quarter.
+RECENT_GAMEWEEKS = 6
+
 #: Weight given to FPL's own `ep_next` for the immediate gameweek.
 EP_NEXT_WEIGHT = 0.35
 
@@ -80,6 +96,19 @@ def _f(value, default=0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+@dataclass
+class Appearance:
+    """What a player did in one gameweek his club actually played.
+
+    Gameweeks the club blanked are absent rather than zero: a blank says
+    nothing about whether the manager fancies him.
+    """
+
+    gw: int
+    minutes: float
+    started: bool
 
 
 @dataclass
@@ -119,6 +148,10 @@ class Player:
     news: str = ""
     team_name: str = ""
     team_short: str = ""
+    #: Most recent gameweeks first or last, order does not matter. Empty when
+    #: no per-gameweek history was supplied, in which case the minutes model
+    #: falls back to season totals.
+    recent: list[Appearance] = field(default_factory=list)
 
     @property
     def position_name(self) -> str:
@@ -260,29 +293,88 @@ def _shrink(rate: float, prior: float, minutes: float) -> float:
     return w * rate + (1 - w) * prior
 
 
-def _minutes_profile(p: Player) -> tuple[float, float, float]:
-    """(P(any minutes), P(60+ minutes), expected minutes).
+def _season_profile(p: Player) -> tuple[float, float, float]:
+    """(P(any), P(60+), expected minutes) from season totals alone.
 
-    Start rate is the honest basis: a player who starts is very likely to reach
-    60 minutes, a substitute rarely is. Both are conditioned on being available
-    in the first place.
+    The fallback, for a player with no per-gameweek history behind him. Start
+    rate is the honest basis: a player who starts is very likely to reach 60
+    minutes, a substitute rarely is.
+
+    Note what this cannot do. `p.minutes / 90` counts 90-minute equivalents
+    rather than matches, so it cannot tell a player who started six times and
+    was always withdrawn at 60 from one who started four times and finished
+    them. That is the whole reason recent appearances are worth fetching.
     """
-    appearances = max(1.0, p.minutes / 90.0)
-    start_rate = min(1.0, p.starts / appearances) if p.starts else 0.0
-
     if p.minutes == 0:
         # No evidence at all. Treat as a fringe player rather than assuming
         # either extreme; the availability multiplier still applies.
-        p_any, p_60 = 0.25, 0.10
+        return 0.25, 0.10, 90.0 * 0.10 + 25.0 * 0.15
+
+    nineties = max(1.0, p.minutes / 90.0)
+    start_rate = min(1.0, p.starts / nineties) if p.starts else 0.0
+    p_any = min(1.0, 0.35 + 0.65 * start_rate)
+    p_60 = min(0.97, start_rate)
+    return p_any, p_60, 90.0 * p_60 + 25.0 * max(0.0, p_any - p_60)
+
+
+def _recent_profile(p: Player) -> tuple[float, float, float, float]:
+    """(P(any), P(60+), expected minutes, gameweeks of evidence).
+
+    Read straight off what happened rather than inferred from a start rate,
+    and weighted towards the present on a half-life. The fourth value is the
+    summed weight: the effective number of gameweeks the estimate rests on.
+    """
+    if not p.recent:
+        return 0.0, 0.0, 0.0, 0.0
+
+    newest = max(a.gw for a in p.recent)
+    total = played = sixty = minutes = 0.0
+    for a in p.recent:
+        w = 0.5 ** ((newest - a.gw) / MINUTES_HALF_LIFE)
+        total += w
+        if a.minutes > 0:
+            played += w
+        if a.minutes >= 60:
+            sixty += w
+        minutes += w * a.minutes
+
+    if total <= 0:
+        return 0.0, 0.0, 0.0, 0.0
+    return played / total, sixty / total, minutes / total, total
+
+
+def _minutes_profile(p: Player) -> tuple[float, float, float]:
+    """(P(any minutes), P(60+ minutes), expected minutes).
+
+    Whether a player features at all is the largest single term in his score,
+    and season totals describe a player who may no longer exist: someone who
+    lost his place a month ago still reads as a starter for weeks afterwards.
+
+    So recent gameweeks are weighted towards the present, then shrunk back
+    towards the season total only as far as the thinness of the window
+    demands. With no history supplied this is exactly the old estimate, so the
+    model degrades rather than breaks.
+
+    Everything is conditioned on being available in the first place.
+    """
+    s_any, s_60, s_minutes = _season_profile(p)
+    r_any, r_60, r_minutes, evidence = _recent_profile(p)
+
+    if evidence > 0:
+        w = evidence / (evidence + RECENT_PRIOR_GAMEWEEKS)
+        p_any = w * r_any + (1 - w) * s_any
+        p_60 = w * r_60 + (1 - w) * s_60
+        expected_minutes = w * r_minutes + (1 - w) * s_minutes
     else:
-        minutes_per_appearance = p.minutes / appearances
-        p_any = min(1.0, 0.35 + 0.65 * start_rate)
-        p_60 = min(0.97, start_rate * min(1.0, minutes_per_appearance / 75.0))
+        p_any, p_60, expected_minutes = s_any, s_60, s_minutes
 
     p_any *= p.availability
     p_60 *= p.availability
-    expected_minutes = 90.0 * p_60 + 25.0 * max(0.0, p_any - p_60)
-    return p_any, p_60, expected_minutes
+    expected_minutes *= p.availability
+    # Sixty minutes is a subset of any minutes; blending two estimates can
+    # otherwise cross them over for a player who is always either benched or
+    # played in full.
+    return p_any, min(p_any, p_60), expected_minutes
 
 
 def _expected_bonus(bps90: float, minutes: float) -> float:
@@ -371,18 +463,23 @@ def _poisson_at_least(k: float, mean: float) -> float:
     return max(0.0, 1.0 - cumulative)
 
 
-def build(bootstrap: dict, fixtures_raw: list, horizon: list[int]) -> dict[int, Projection]:
-    """Project every player over each gameweek in `horizon`."""
-    teams = {t["id"]: t for t in bootstrap["teams"]}
-    players = [player_from(r, teams) for r in bootstrap["elements"]]
-    priors = Priors(players)
+def fixtures_by_team(
+    fixtures_raw: list, horizon: list[int], skip_finished: bool = True
+) -> dict[tuple[int, int], list[Fixture]]:
+    """Fixtures indexed by (gameweek, team).
 
-    # Fixtures indexed by (gameweek, team), so a double gameweek is simply a
-    # list of length two and a blank is an absent key.
+    A double gameweek is simply a list of length two and a blank is an absent
+    key, which is the whole reason doubles are worth planning around.
+
+    Projecting forward skips matches already played; replaying a past
+    gameweek in fpl/backtest.py wants exactly those, hence `skip_finished`.
+    """
     by_team: dict[tuple[int, int], list[Fixture]] = {}
     for fx in fixtures_raw:
         gw = fx.get("event")
-        if gw is None or gw not in horizon or fx.get("finished"):
+        if gw is None or gw not in horizon:
+            continue
+        if skip_finished and fx.get("finished"):
             continue
         by_team.setdefault((gw, fx["team_h"]), []).append(
             Fixture(fx["team_a"], True, fx.get("team_h_difficulty", 3), fx.get("kickoff_time"))
@@ -390,6 +487,57 @@ def build(bootstrap: dict, fixtures_raw: list, horizon: list[int]) -> dict[int, 
         by_team.setdefault((gw, fx["team_a"]), []).append(
             Fixture(fx["team_h"], False, fx.get("team_a_difficulty", 3), fx.get("kickoff_time"))
         )
+    return by_team
+
+
+def appearances_from_live(
+    history: dict[int, dict[int, dict]],
+    fixtures_raw: list,
+    team_of: dict[int, int],
+) -> dict[int, list[Appearance]]:
+    """Turn per-gameweek live stats into per-player appearance lists.
+
+    A gameweek in which a player's club did not play is left out rather than
+    recorded as a benching, because a blank is not evidence about selection.
+    That distinction is the difference between reading a blank gameweek as
+    rotation and reading it as what it is.
+    """
+    playing: dict[int, set[int]] = {}
+    for fx in fixtures_raw:
+        gw = fx.get("event")
+        if gw is None:
+            continue
+        playing.setdefault(gw, set()).update((fx["team_h"], fx["team_a"]))
+
+    out: dict[int, list[Appearance]] = {}
+    for gw, by_player in history.items():
+        had_a_match = playing.get(gw, set())
+        for pid, stats in by_player.items():
+            if team_of.get(pid) not in had_a_match:
+                continue
+            out.setdefault(pid, []).append(Appearance(
+                gw=gw,
+                minutes=_f(stats.get("minutes")),
+                started=bool(_f(stats.get("starts"))),
+            ))
+    return out
+
+
+def build(
+    bootstrap: dict,
+    fixtures_raw: list,
+    horizon: list[int],
+    recent: dict[int, list[Appearance]] | None = None,
+) -> dict[int, Projection]:
+    """Project every player over each gameweek in `horizon`."""
+    teams = {t["id"]: t for t in bootstrap["teams"]}
+    players = [player_from(r, teams) for r in bootstrap["elements"]]
+    if recent:
+        for p in players:
+            p.recent = recent.get(p.id, [])
+    priors = Priors(players)
+
+    by_team = fixtures_by_team(fixtures_raw, horizon)
 
     out = {}
     first = horizon[0] if horizon else None

@@ -53,7 +53,17 @@ def load(horizon_length: int = advice.DEFAULT_HORIZON) -> Context:
     last = max(e["id"] for e in bootstrap["events"])
     horizon = [g for g in range(gw, gw + horizon_length) if g <= last]
 
-    projections = projection.build(bootstrap, fixtures, horizon)
+    # Recent appearances sharpen the minutes model, which is the largest term
+    # in a projection. They are a nicety rather than a requirement, so a bad
+    # day upstream costs accuracy instead of the whole answer.
+    try:
+        history = data.recent_live(bootstrap, projection.RECENT_GAMEWEEKS)
+        team_of = {r["id"]: r["team"] for r in bootstrap["elements"]}
+        recent = projection.appearances_from_live(history, fixtures, team_of)
+    except data.FPLError:
+        recent = None
+
+    projections = projection.build(bootstrap, fixtures, horizon, recent=recent)
     return Context(
         bootstrap=bootstrap,
         fixtures=fixtures,

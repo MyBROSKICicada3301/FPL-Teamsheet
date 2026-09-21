@@ -147,6 +147,32 @@ def history(team_id: int) -> dict:
     return get(f"entry/{team_id}/history/")
 
 
+#: A gameweek that has finished never changes again, so its stats can be held
+#: indefinitely. This is the difference between reading recent form for the
+#: cost of a handful of requests and asking for 600 player summaries.
+FINISHED_EVENT_TTL = 30 * 86400
+
+
+def live(event: int, max_age: int | None = None) -> dict:
+    """Every player's stats for one gameweek, in a single response."""
+    return get(f"event/{event}/live/", max_age=max_age)
+
+
+def recent_live(bootstrap: dict, count: int) -> dict[int, dict[int, dict]]:
+    """Per-player stats for the last `count` finished gameweeks.
+
+    Keyed by gameweek, then by player id. One request per gameweek, all of
+    them cacheable forever, which is what makes recency affordable at all.
+    """
+    finished = sorted(e["id"] for e in bootstrap.get("events", []) if e.get("finished"))
+    out: dict[int, dict[int, dict]] = {}
+    for gw in finished[-count:] if count > 0 else []:
+        payload = live(gw, max_age=FINISHED_EVENT_TTL)
+        elements = payload["elements"] if isinstance(payload, dict) else payload
+        out[gw] = {e["id"]: (e.get("stats") or {}) for e in elements}
+    return out
+
+
 def clear_cache() -> int:
     """Drop every cached response. Returns how many files went."""
     if not CACHE_DIR.exists():
