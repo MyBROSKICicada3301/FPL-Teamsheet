@@ -8,9 +8,10 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Written by ./start.sh
+# Written by ./start.sh and .\start.ps1. Start-Process cannot aim both
+# streams at one file, so the PowerShell side also leaves server.err.log.
 .server.pid
-server.log
+*.log
 
 # FPL API responses, cached by fpl/data.py. Rebuilt on demand.
 .cache/
