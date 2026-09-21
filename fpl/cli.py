@@ -147,8 +147,14 @@ def briefing(written: dict) -> None:
 
 
 def main(argv=None) -> int:
+    # argparse would call this "cli.py", which is not a command anyone can
+    # retype, and a hardcoded "python3" names a command that does not exist
+    # on Windows. The running interpreter's own name is right everywhere:
+    # python3 on Linux and macOS, python on Windows.
+    exe = os.path.splitext(os.path.basename(sys.executable))[0] or "python3"
+
     ap = argparse.ArgumentParser(
-        prog="python3 -m fpl.cli",
+        prog=f"{exe} -m fpl.cli",
         description="Transfer, captain and wildcard advice for the next gameweek.",
     )
     # Not required: FPL_TEAM_ID in .env supplies the default, so the common

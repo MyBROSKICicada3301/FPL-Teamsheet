@@ -147,6 +147,36 @@ def history(team_id: int) -> dict:
     return get(f"entry/{team_id}/history/")
 
 
+#: A gameweek that has finished never changes again, so its stats can be held
+#: indefinitely. This is the difference between reading recent form for the
+#: cost of a handful of requests and asking for 600 player summaries.
+FINISHED_EVENT_TTL = 30 * 86400
+
+
+def live(event: int, max_age: int | None = None) -> dict:
+    """Every player's stats for one gameweek, in a single response."""
+    return get(f"event/{event}/live/", max_age=max_age)
+
+
+def recent_live(bootstrap: dict, count: int | None = None) -> dict[int, dict[int, dict]]:
+    """Per-player stats for finished gameweeks, most recent `count` of them.
+
+    Keyed by gameweek, then by player id. `count` of None means every gameweek
+    played so far, which is what the team strength model wants; the minutes
+    model slices a shorter window off the same result rather than fetching
+    twice. One request per gameweek, each cacheable until the heat death of
+    the season, which is what makes any of this affordable.
+    """
+    finished = sorted(e["id"] for e in bootstrap.get("events", []) if e.get("finished"))
+    wanted = finished if count is None else (finished[-count:] if count > 0 else [])
+    out: dict[int, dict[int, dict]] = {}
+    for gw in wanted:
+        payload = live(gw, max_age=FINISHED_EVENT_TTL)
+        elements = payload["elements"] if isinstance(payload, dict) else payload
+        out[gw] = {e["id"]: (e.get("stats") or {}) for e in elements}
+    return out
+
+
 def clear_cache() -> int:
     """Drop every cached response. Returns how many files went."""
     if not CACHE_DIR.exists():

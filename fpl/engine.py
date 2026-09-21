@@ -53,7 +53,27 @@ def load(horizon_length: int = advice.DEFAULT_HORIZON) -> Context:
     last = max(e["id"] for e in bootstrap["events"])
     horizon = [g for g in range(gw, gw + horizon_length) if g <= last]
 
-    projections = projection.build(bootstrap, fixtures, horizon)
+    # Two things sharpen the projection: recent appearances for the minutes
+    # model, and expected goals for how hard each fixture actually is. Both
+    # come from the same per-gameweek feed, read once. Both are niceties
+    # rather than requirements, so a bad day upstream costs accuracy instead
+    # of the whole answer.
+    recent = strength = None
+    try:
+        history = data.recent_live(bootstrap)
+        team_of = {r["id"]: r["team"] for r in bootstrap["elements"]}
+
+        window = dict(sorted(history.items())[-projection.RECENT_GAMEWEEKS:])
+        recent = projection.appearances_from_live(window, fixtures, team_of)
+
+        matches = projection.team_xg_from_live(history, fixtures, team_of)
+        strength = projection.TeamStrength(matches)
+    except data.FPLError:
+        pass
+
+    projections = projection.build(
+        bootstrap, fixtures, horizon, recent=recent, strength=strength
+    )
     return Context(
         bootstrap=bootstrap,
         fixtures=fixtures,

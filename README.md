@@ -14,7 +14,7 @@ Python 3.10 or newer and a browser, you have everything.
 
 ```bash
 git clone https://github.com/MyBROSKICicada3301/fpl-assistant.git
-cd fpl-assistant
+cd fpl-teamsheet
 ./start.sh
 ```
 
